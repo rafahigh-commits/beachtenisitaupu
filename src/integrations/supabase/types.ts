@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      athletes: {
+        Row: {
+          birth_date: string | null
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          joined_at: string | null
+          legacy_id: number | null
+          manual_status: Database["public"]["Enums"]["manual_status"] | null
+          notes: string | null
+          phone: string | null
+          plan_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          birth_date?: string | null
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          joined_at?: string | null
+          legacy_id?: number | null
+          manual_status?: Database["public"]["Enums"]["manual_status"] | null
+          notes?: string | null
+          phone?: string | null
+          plan_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          birth_date?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          joined_at?: string | null
+          legacy_id?: number | null
+          manual_status?: Database["public"]["Enums"]["manual_status"] | null
+          notes?: string | null
+          phone?: string | null
+          plan_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athletes_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_settings: {
         Row: {
           charge_days: number
@@ -41,6 +97,7 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          athlete_id: string
           created_at: string
           created_by: string | null
           due_date: string | null
@@ -49,10 +106,10 @@ export type Database = {
           notes: string | null
           paid_at: string
           reference_month: string
-          user_id: string
         }
         Insert: {
           amount: number
+          athlete_id: string
           created_at?: string
           created_by?: string | null
           due_date?: string | null
@@ -61,10 +118,10 @@ export type Database = {
           notes?: string | null
           paid_at?: string
           reference_month: string
-          user_id: string
         }
         Update: {
           amount?: number
+          athlete_id?: string
           created_at?: string
           created_by?: string | null
           due_date?: string | null
@@ -73,9 +130,16 @@ export type Database = {
           notes?: string | null
           paid_at?: string
           reference_month?: string
-          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payments_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       plans: {
         Row: {
