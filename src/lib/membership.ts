@@ -1,101 +1,93 @@
-import { differenceInDays, parseISO, format, addMonths, startOfMonth } from "date-fns";
+import { differenceInDays, parseISO, format, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export interface PaymentRow {
   reference_month: string;
   paid_at: string;
+  due_date?: string | null;
+  amount: number;
 }
 
-export type Status = "active" | "warning" | "overdue" | "new";
+export type ManualStatus = "isento" | "saiu" | "doente";
+
+export type Status =
+  | "active"      // em dia
+  | "warning"     // próximo do vencimento (entre vencimento e charge_days)
+  | "charge"      // em cobrança (passou charge_days mas ainda não inativo)
+  | "inactive"    // ultrapassou inactive_days
+  | "exempt"      // isento (manual)
+  | "left"        // saiu (manual)
+  | "sick"        // doente (manual)
+  | "new";        // novo, sem pagamentos ainda
 
 export interface StatusInfo {
   status: Status;
   label: string;
-  daysSincePayment: number | null;
-  daysUntilDue: number | null;
+  daysSinceDue: number | null;
+  lastDueDate: Date | null;
   lastPayment: PaymentRow | null;
-  nextDueDate: Date;
 }
 
-/**
- * Active = pagou o mês corrente ou anterior e está dentro da tolerância.
- * Overdue = ultrapassou tolerância sem pagar o mês de referência atual.
- */
+interface PlanInfo {
+  duration_months: number;
+}
+
+/** Calcula até quando vai a validade de um pagamento. */
+function paymentDueDate(p: PaymentRow, plan?: PlanInfo): Date {
+  if (p.due_date) return parseISO(p.due_date);
+  const ref = parseISO(p.reference_month);
+  const months = plan?.duration_months ?? 1;
+  // último dia do período (subtrai 1 dia)
+  const end = addMonths(ref, months);
+  end.setDate(end.getDate() - 1);
+  return end;
+}
+
 export function computeStatus(
   payments: PaymentRow[],
-  graceDays: number,
+  chargeDays: number,
+  inactiveDays: number,
+  manualStatus: ManualStatus | null,
+  plan?: PlanInfo,
   joinedAt?: string,
 ): StatusInfo {
-  const now = new Date();
-  const currentMonthStart = startOfMonth(now);
-  const nextDueDate = addMonths(currentMonthStart, 1);
+  // Status manual sobrescreve tudo
+  if (manualStatus === "isento") {
+    return { status: "exempt", label: "Isento", daysSinceDue: null, lastDueDate: null, lastPayment: null };
+  }
+  if (manualStatus === "saiu") {
+    return { status: "left", label: "Saiu", daysSinceDue: null, lastDueDate: null, lastPayment: null };
+  }
+  if (manualStatus === "doente") {
+    return { status: "sick", label: "Doente", daysSinceDue: null, lastDueDate: null, lastPayment: null };
+  }
 
+  const now = new Date();
   const sorted = [...payments].sort((a, b) =>
-    b.reference_month.localeCompare(a.reference_month),
+    paymentDueDate(b, plan).getTime() - paymentDueDate(a, plan).getTime(),
   );
   const last = sorted[0] ?? null;
 
   if (!last) {
-    // Nunca pagou — se acabou de entrar, é "novo"
-    if (joinedAt && differenceInDays(now, parseISO(joinedAt)) <= graceDays) {
-      return {
-        status: "new",
-        label: "Novo membro",
-        daysSincePayment: null,
-        daysUntilDue: differenceInDays(nextDueDate, now),
-        lastPayment: null,
-        nextDueDate,
-      };
+    if (joinedAt && differenceInDays(now, parseISO(joinedAt)) <= chargeDays) {
+      return { status: "new", label: "Novo membro", daysSinceDue: null, lastDueDate: null, lastPayment: null };
     }
-    return {
-      status: "overdue",
-      label: "Em atraso",
-      daysSincePayment: null,
-      daysUntilDue: differenceInDays(nextDueDate, now),
-      lastPayment: null,
-      nextDueDate,
-    };
+    return { status: "inactive", label: "Inativo", daysSinceDue: null, lastDueDate: null, lastPayment: null };
   }
 
-  const lastRefMonth = startOfMonth(parseISO(last.reference_month));
-  const monthsBehind =
-    (currentMonthStart.getFullYear() - lastRefMonth.getFullYear()) * 12 +
-    (currentMonthStart.getMonth() - lastRefMonth.getMonth());
+  const due = paymentDueDate(last, plan);
+  const daysSinceDue = differenceInDays(now, due);
 
-  const daysSince = differenceInDays(now, parseISO(last.paid_at));
-
-  if (monthsBehind <= 0) {
-    return {
-      status: "active",
-      label: "Em dia",
-      daysSincePayment: daysSince,
-      daysUntilDue: differenceInDays(nextDueDate, now),
-      lastPayment: last,
-      nextDueDate,
-    };
+  if (daysSinceDue <= 0) {
+    return { status: "active", label: "Em dia", daysSinceDue, lastDueDate: due, lastPayment: last };
   }
-
-  // pagou mês anterior, mas o atual ainda está na tolerância
-  const daysIntoMonth = differenceInDays(now, currentMonthStart);
-  if (monthsBehind === 1 && daysIntoMonth <= graceDays) {
-    return {
-      status: "warning",
-      label: "Vence em breve",
-      daysSincePayment: daysSince,
-      daysUntilDue: graceDays - daysIntoMonth,
-      lastPayment: last,
-      nextDueDate,
-    };
+  if (daysSinceDue <= chargeDays) {
+    return { status: "warning", label: "Vence em breve", daysSinceDue, lastDueDate: due, lastPayment: last };
   }
-
-  return {
-    status: "overdue",
-    label: "Em atraso",
-    daysSincePayment: daysSince,
-    daysUntilDue: -daysIntoMonth,
-    lastPayment: last,
-    nextDueDate,
-  };
+  if (daysSinceDue <= inactiveDays) {
+    return { status: "charge", label: "Em cobrança", daysSinceDue, lastDueDate: due, lastPayment: last };
+  }
+  return { status: "inactive", label: "Inativo", daysSinceDue, lastDueDate: due, lastPayment: last };
 }
 
 export function formatCurrency(value: number) {
