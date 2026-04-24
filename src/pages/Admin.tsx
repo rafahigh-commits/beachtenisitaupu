@@ -1,133 +1,171 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Search, Users, DollarSign, AlertTriangle, CheckCircle2, Settings, Shield } from "lucide-react";
-import { computeStatus, formatCurrency, formatMonth, type StatusInfo } from "@/lib/membership";
+import {
+  Loader2, Plus, Search, Users, DollarSign, AlertTriangle,
+  CheckCircle2, Settings, UserCog, Pencil,
+} from "lucide-react";
+import {
+  computeStatus, formatCurrency, formatMonth,
+  type StatusInfo, type ManualStatus, type Status,
+} from "@/lib/membership";
 import { toast } from "sonner";
 import { format } from "date-fns";
-
-interface MemberRow {
-  id: string;
-  full_name: string;
-  phone: string | null;
-  joined_at: string;
-  plan_id: string | null;
-  plans: { name: string; price: number } | null;
-  payments: { reference_month: string; paid_at: string; amount: number }[];
-}
-
 
 interface Plan {
   id: string;
   name: string;
   price: number;
-  frequency_per_week: number;
+  duration_months: number;
 }
+
+interface Athlete {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+  birth_date: string | null;
+  joined_at: string | null;
+  plan_id: string | null;
+  manual_status: ManualStatus | null;
+  notes: string | null;
+  user_id: string | null;
+  legacy_id: number | null;
+  plans: { name: string; price: number; duration_months: number } | null;
+  payments: { reference_month: string; paid_at: string; amount: number; due_date: string | null }[];
+}
+
+type AthleteWithStatus = Athlete & { status: StatusInfo };
+
+const STATUS_FILTERS: { value: Status | "all"; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "active", label: "Em dia" },
+  { value: "warning", label: "Vence em breve" },
+  { value: "charge", label: "Em cobrança" },
+  { value: "inactive", label: "Inativos" },
+  { value: "exempt", label: "Isentos" },
+  { value: "sick", label: "Doentes" },
+  { value: "left", label: "Saíram" },
+];
 
 export default function Admin() {
   const [loading, setLoading] = useState(true);
-  const [members, setMembers] = useState<(MemberRow & { status: StatusInfo })[]>([]);
+  const [athletes, setAthletes] = useState<AthleteWithStatus[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [graceDays, setGraceDays] = useState(7);
+  const [chargeDays, setChargeDays] = useState(40);
+  const [inactiveDays, setInactiveDays] = useState(120);
   const [groupName, setGroupName] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
 
-  // payment dialog
   const [payOpen, setPayOpen] = useState(false);
-  const [payTarget, setPayTarget] = useState<MemberRow | null>(null);
+  const [payTarget, setPayTarget] = useState<Athlete | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payMonth, setPayMonth] = useState(format(new Date(), "yyyy-MM-01"));
   const [payDate, setPayDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [payDueDate, setPayDueDate] = useState("");
   const [payMethod, setPayMethod] = useState("PIX");
   const [paySaving, setPaySaving] = useState(false);
 
-  // role dialog
-  const [roleTarget, setRoleTarget] = useState<MemberRow | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Athlete | null>(null);
 
   useEffect(() => {
-    document.title = "Admin | Beach.Club";
+    document.title = "Admin | Itaipu Beach Tennis";
   }, []);
 
   const load = useCallback(async () => {
-    const [membersRes, paymentsRes, plansRes, settingsRes] = await Promise.all([
+    const [athRes, paysRes, plansRes, settingsRes] = await Promise.all([
       supabase
-        .from("profiles")
-        .select("id, full_name, phone, joined_at, plan_id, plans(name, price)")
+        .from("athletes")
+        .select("id, full_name, phone, email, birth_date, joined_at, plan_id, manual_status, notes, user_id, legacy_id, plans(name, price, duration_months)")
         .order("full_name"),
-      supabase.from("payments").select("user_id, reference_month, paid_at, amount"),
-      supabase.from("plans").select("id, name, price, frequency_per_week").order("frequency_per_week"),
-      supabase.from("group_settings").select("grace_days, group_name").eq("id", 1).maybeSingle(),
+      supabase.from("payments").select("athlete_id, reference_month, paid_at, amount, due_date"),
+      supabase.from("plans").select("id, name, price, duration_months").eq("active", true).order("duration_months").order("price"),
+      supabase.from("group_settings").select("charge_days, inactive_days, group_name").eq("id", 1).maybeSingle(),
     ]);
 
-    const grace = settingsRes.data?.grace_days ?? 7;
-    setGraceDays(grace);
+    const cd = settingsRes.data?.charge_days ?? 40;
+    const id = settingsRes.data?.inactive_days ?? 120;
+    setChargeDays(cd);
+    setInactiveDays(id);
     setGroupName(settingsRes.data?.group_name ?? "");
 
-    const paymentsByUser = new Map<string, MemberRow["payments"]>();
-    for (const p of (paymentsRes.data ?? []) as Array<{
-      user_id: string;
-      reference_month: string;
-      paid_at: string;
-      amount: number;
+    const paysByAth = new Map<string, Athlete["payments"]>();
+    for (const p of (paysRes.data ?? []) as Array<{
+      athlete_id: string; reference_month: string; paid_at: string; amount: number; due_date: string | null;
     }>) {
-      const arr = paymentsByUser.get(p.user_id) ?? [];
-      arr.push({ reference_month: p.reference_month, paid_at: p.paid_at, amount: p.amount });
-      paymentsByUser.set(p.user_id, arr);
+      const arr = paysByAth.get(p.athlete_id) ?? [];
+      arr.push({ reference_month: p.reference_month, paid_at: p.paid_at, amount: Number(p.amount), due_date: p.due_date });
+      paysByAth.set(p.athlete_id, arr);
     }
 
-    const list = ((membersRes.data ?? []) as Omit<MemberRow, "payments">[]).map(
-      (m): MemberRow & { status: StatusInfo } => {
-        const pays = paymentsByUser.get(m.id) ?? [];
-        return { ...m, payments: pays, status: computeStatus(pays, grace, m.joined_at) };
+    const list = ((athRes.data ?? []) as Omit<Athlete, "payments">[]).map(
+      (a): AthleteWithStatus => {
+        const pays = paysByAth.get(a.id) ?? [];
+        return {
+          ...a,
+          payments: pays,
+          status: computeStatus(
+            pays, cd, id,
+            a.manual_status,
+            a.plans ? { duration_months: a.plans.duration_months } : undefined,
+            a.joined_at ?? undefined,
+          ),
+        };
       },
     );
-    setMembers(list);
+    setAthletes(list);
     setPlans((plansRes.data ?? []) as Plan[]);
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  const filtered = members.filter((m) =>
-    m.full_name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return athletes.filter((a) => {
+      const matchSearch = !q || a.full_name.toLowerCase().includes(q) || (a.phone ?? "").includes(q);
+      const matchStatus = statusFilter === "all" || a.status.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [athletes, search, statusFilter]);
 
-  const stats = {
-    total: members.length,
-    active: members.filter((m) => m.status.status === "active").length,
-    overdue: members.filter((m) => m.status.status === "overdue").length,
-    revenue: members
-      .filter((m) => m.status.status === "active")
-      .reduce((s, m) => s + Number(m.plans?.price ?? 0), 0),
-  };
+  const stats = useMemo(() => {
+    const counted = athletes.filter((a) => a.status.status !== "left");
+    return {
+      total: counted.length,
+      active: athletes.filter((a) => a.status.status === "active").length,
+      overdue: athletes.filter((a) => ["charge", "inactive"].includes(a.status.status)).length,
+      revenue: athletes
+        .filter((a) => a.status.status === "active")
+        .reduce((s, a) => s + Number(a.plans?.price ?? 0), 0),
+    };
+  }, [athletes]);
 
-  function openPayDialog(m: MemberRow) {
-    setPayTarget(m);
-    setPayAmount(String(m.plans?.price ?? ""));
+  function openPayDialog(a: Athlete) {
+    setPayTarget(a);
+    setPayAmount(String(a.plans?.price ?? ""));
     setPayMonth(format(new Date(), "yyyy-MM-01"));
     setPayDate(format(new Date(), "yyyy-MM-dd"));
+    // sugere validade baseada no plano
+    const months = a.plans?.duration_months ?? 1;
+    const due = new Date();
+    due.setMonth(due.getMonth() + months);
+    due.setDate(due.getDate() - 1);
+    setPayDueDate(format(due, "yyyy-MM-dd"));
     setPayMethod("PIX");
     setPayOpen(true);
   }
@@ -138,18 +176,16 @@ export default function Admin() {
     setPaySaving(true);
     const { data: userData } = await supabase.auth.getUser();
     const { error } = await supabase.from("payments").insert({
-      user_id: payTarget.id,
+      athlete_id: payTarget.id,
       amount: Number(payAmount),
       reference_month: payMonth,
       paid_at: payDate,
+      due_date: payDueDate || null,
       method: payMethod,
       created_by: userData.user?.id,
     });
     setPaySaving(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
+    if (error) { toast.error(error.message); return; }
     toast.success("Pagamento registrado!");
     setPayOpen(false);
     load();
@@ -158,28 +194,15 @@ export default function Admin() {
   async function saveSettings() {
     const { error } = await supabase
       .from("group_settings")
-      .update({ grace_days: graceDays, group_name: groupName })
+      .update({ charge_days: chargeDays, inactive_days: inactiveDays, group_name: groupName })
       .eq("id", 1);
     if (error) return toast.error(error.message);
     toast.success("Configurações salvas!");
     load();
   }
 
-  async function makeAdmin(memberId: string) {
-    const { error } = await supabase
-      .from("user_roles")
-      .insert({ user_id: memberId, role: "admin" });
-    if (error) return toast.error(error.message);
-    toast.success("Membro promovido a admin!");
-    setRoleTarget(null);
-  }
-
   if (loading) {
-    return (
-      <div className="min-h-dvh grid place-items-center">
-        <Loader2 className="size-8 animate-spin text-primary" />
-      </div>
-    );
+    return <div className="min-h-dvh grid place-items-center"><Loader2 className="size-8 animate-spin text-primary" /></div>;
   }
 
   return (
@@ -192,82 +215,77 @@ export default function Admin() {
       <main className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 mt-8">
         <header className="mb-8">
           <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary bg-primary/10 rounded-full px-3 py-1 mb-3">
-            <Shield className="size-3" /> Painel Administrativo
+            <UserCog className="size-3" /> Painel Administrativo
           </span>
-          <h1 className="font-heading text-4xl font-extrabold text-ocean-deep">
-            Comando do Clube
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Acompanhe todos os membros, pagamentos e configurações.
-          </p>
+          <h1 className="font-heading text-4xl font-extrabold text-ocean-deep">Comando do Clube</h1>
+          <p className="text-muted-foreground mt-1">{athletes.length} atletas cadastrados.</p>
         </header>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatCard icon={<Users className="size-5" />} label="Total membros" value={stats.total} tone="primary" />
+          <StatCard icon={<Users className="size-5" />} label="Atletas ativos no grupo" value={stats.total} tone="primary" />
           <StatCard icon={<CheckCircle2 className="size-5" />} label="Em dia" value={stats.active} tone="success" />
-          <StatCard icon={<AlertTriangle className="size-5" />} label="Em atraso" value={stats.overdue} tone="destructive" />
+          <StatCard icon={<AlertTriangle className="size-5" />} label="Cobrança / Inativos" value={stats.overdue} tone="destructive" />
           <StatCard icon={<DollarSign className="size-5" />} label="Receita ativa" value={formatCurrency(stats.revenue)} tone="accent" />
         </div>
 
         <Tabs defaultValue="members">
           <TabsList className="mb-6">
-            <TabsTrigger value="members">Membros</TabsTrigger>
+            <TabsTrigger value="members">Atletas</TabsTrigger>
             <TabsTrigger value="plans">Planos</TabsTrigger>
             <TabsTrigger value="settings">Configurações</TabsTrigger>
           </TabsList>
 
           <TabsContent value="members">
-            <div className="glass rounded-[32px] p-6 md:p-8">
-              <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-6">
-                <div className="relative max-w-sm flex-1">
+            <div className="glass rounded-[32px] p-4 md:p-6">
+              <div className="flex flex-col md:flex-row gap-3 md:items-center mb-5">
+                <div className="relative flex-1">
                   <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar jogador..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-10"
-                  />
+                  <Input placeholder="Buscar por nome ou telefone..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
                 </div>
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as Status | "all")}>
+                  <SelectTrigger className="md:w-56"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_FILTERS.map((f) => (
+                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="space-y-3">
+              <p className="text-xs text-muted-foreground mb-3">
+                Mostrando <strong>{filtered.length}</strong> de {athletes.length}
+              </p>
+
+              <div className="space-y-2">
                 {filtered.length === 0 && (
-                  <p className="text-center text-muted-foreground py-12">
-                    Nenhum membro encontrado.
-                  </p>
+                  <p className="text-center text-muted-foreground py-12">Nenhum atleta encontrado.</p>
                 )}
-                {filtered.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex flex-col md:flex-row md:items-center gap-4 p-4 md:p-5 rounded-2xl bg-white/60 hover:bg-white/80 transition-colors"
-                  >
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="size-12 rounded-2xl bg-gradient-aqua text-primary-foreground font-bold grid place-items-center shadow-glow shrink-0">
-                        {m.full_name.slice(0, 2).toUpperCase() || "??"}
+                {filtered.map((a) => (
+                  <div key={a.id} className="flex flex-col md:flex-row md:items-center gap-3 p-3 md:p-4 rounded-2xl bg-white/60 hover:bg-white/80 transition-colors">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="size-10 rounded-xl bg-gradient-aqua text-primary-foreground font-bold grid place-items-center shadow-glow shrink-0 text-sm">
+                        {a.full_name.slice(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-semibold text-ocean-deep truncate">
-                          {m.full_name || "Sem nome"}
-                        </p>
+                        <p className="font-semibold text-ocean-deep truncate">{a.full_name}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {m.plans?.name ?? "Sem plano"} ·{" "}
-                          {m.phone ?? "sem WhatsApp"}
+                          {a.plans?.name ?? "Sem plano"} · {a.phone ?? "sem WhatsApp"}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <StatusBadge status={m.status.status} label={m.status.label} size="sm" />
-                      {m.status.lastPayment && (
-                        <span className="text-xs text-muted-foreground capitalize">
-                          últ: {formatMonth(m.status.lastPayment.reference_month)}
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <StatusBadge status={a.status.status} label={a.status.label} size="sm" />
+                      {a.status.lastDueDate && a.status.daysSinceDue !== null && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {a.status.daysSinceDue > 0 ? `+${a.status.daysSinceDue}d` : `${a.status.daysSinceDue}d`}
                         </span>
                       )}
-                      <Button size="sm" onClick={() => openPayDialog(m)}>
-                        <Plus className="size-4 mr-1" /> Pagamento
+                      <Button size="sm" onClick={() => openPayDialog(a)}>
+                        <Plus className="size-4 mr-1" /> Pagto
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setRoleTarget(m)}>
-                        <Shield className="size-4" />
+                      <Button size="sm" variant="outline" onClick={() => { setEditTarget(a); setEditOpen(true); }}>
+                        <Pencil className="size-3" />
                       </Button>
                     </div>
                   </div>
@@ -277,16 +295,14 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="plans">
-            <div className="glass rounded-[32px] p-6 md:p-8 grid sm:grid-cols-3 gap-4">
+            <div className="glass rounded-[32px] p-6 md:p-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {plans.map((p) => (
-                <div key={p.id} className="bg-white/70 rounded-2xl p-6 border border-border/50">
-                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                    {p.frequency_per_week}x por semana
+                <div key={p.id} className="bg-white/70 rounded-2xl p-5 border border-border/50">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
+                    {p.duration_months === 1 ? "Mensal" : `${p.duration_months} meses`}
                   </p>
-                  <h3 className="font-heading text-xl font-extrabold text-ocean-deep mb-1">
-                    {p.name}
-                  </h3>
-                  <p className="font-heading text-3xl font-extrabold text-refract">
+                  <h3 className="font-heading text-lg font-extrabold text-ocean-deep">{p.name}</h3>
+                  <p className="font-heading text-2xl font-extrabold text-refract mt-2">
                     {formatCurrency(Number(p.price))}
                   </p>
                 </div>
@@ -298,32 +314,22 @@ export default function Admin() {
             <div className="glass rounded-[32px] p-6 md:p-8 max-w-xl">
               <div className="flex items-center gap-2 mb-6">
                 <Settings className="size-5 text-primary" />
-                <h3 className="font-heading text-xl font-extrabold text-ocean-deep">
-                  Regras do grupo
-                </h3>
+                <h3 className="font-heading text-xl font-extrabold text-ocean-deep">Regras do grupo</h3>
               </div>
               <div className="space-y-5">
                 <div>
                   <Label htmlFor="group-name">Nome do grupo</Label>
-                  <Input
-                    id="group-name"
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                  />
+                  <Input id="group-name" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
                 </div>
                 <div>
-                  <Label htmlFor="grace">Tolerância de atraso (dias)</Label>
-                  <Input
-                    id="grace"
-                    type="number"
-                    min={0}
-                    max={30}
-                    value={graceDays}
-                    onChange={(e) => setGraceDays(Number(e.target.value))}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Quantos dias após o vencimento o membro continua "em dia".
-                  </p>
+                  <Label htmlFor="charge">Dias para entrar em cobrança</Label>
+                  <Input id="charge" type="number" min={0} value={chargeDays} onChange={(e) => setChargeDays(Number(e.target.value))} />
+                  <p className="text-xs text-muted-foreground mt-1">Após X dias do vencimento o atleta entra em cobrança.</p>
+                </div>
+                <div>
+                  <Label htmlFor="inactive">Dias para virar inativo</Label>
+                  <Input id="inactive" type="number" min={0} value={inactiveDays} onChange={(e) => setInactiveDays(Number(e.target.value))} />
+                  <p className="text-xs text-muted-foreground mt-1">Após X dias do vencimento o atleta é considerado inativo.</p>
                 </div>
                 <Button onClick={saveSettings}>Salvar configurações</Button>
               </div>
@@ -338,48 +344,32 @@ export default function Admin() {
           <form onSubmit={handleSavePayment}>
             <DialogHeader>
               <DialogTitle>Registrar pagamento</DialogTitle>
-              <DialogDescription>
-                {payTarget?.full_name ?? "Membro"}
-              </DialogDescription>
+              <DialogDescription>{payTarget?.full_name}</DialogDescription>
             </DialogHeader>
-
             <div className="space-y-4 py-4">
               <div>
                 <Label>Valor (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                />
+                <Input type="number" step="0.01" required value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Mês de referência</Label>
-                  <Input
-                    type="month"
-                    required
-                    value={payMonth.slice(0, 7)}
-                    onChange={(e) => setPayMonth(e.target.value + "-01")}
-                  />
+                  <Input type="month" required value={payMonth.slice(0, 7)} onChange={(e) => setPayMonth(e.target.value + "-01")} />
                 </div>
                 <div>
                   <Label>Pago em</Label>
-                  <Input
-                    type="date"
-                    required
-                    value={payDate}
-                    onChange={(e) => setPayDate(e.target.value)}
-                  />
+                  <Input type="date" required value={payDate} onChange={(e) => setPayDate(e.target.value)} />
                 </div>
+              </div>
+              <div>
+                <Label>Validade até</Label>
+                <Input type="date" value={payDueDate} onChange={(e) => setPayDueDate(e.target.value)} />
+                <p className="text-xs text-muted-foreground mt-1">Sugerido baseado no plano. Ajuste se necessário.</p>
               </div>
               <div>
                 <Label>Forma</Label>
                 <Select value={payMethod} onValueChange={setPayMethod}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PIX">PIX</SelectItem>
                     <SelectItem value="Dinheiro">Dinheiro</SelectItem>
@@ -389,11 +379,8 @@ export default function Admin() {
                 </Select>
               </div>
             </div>
-
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPayOpen(false)}>
-                Cancelar
-              </Button>
+              <Button type="button" variant="outline" onClick={() => setPayOpen(false)}>Cancelar</Button>
               <Button type="submit" disabled={paySaving}>
                 {paySaving ? <Loader2 className="size-4 animate-spin" /> : "Registrar"}
               </Button>
@@ -402,40 +389,121 @@ export default function Admin() {
         </DialogContent>
       </Dialog>
 
-      {/* Role dialog */}
-      <Dialog open={!!roleTarget} onOpenChange={(o) => !o && setRoleTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Promover a administrador</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja dar acesso de admin para{" "}
-              <strong>{roleTarget?.full_name}</strong>? Eles poderão ver todos os membros e
-              registrar pagamentos.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRoleTarget(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => roleTarget && makeAdmin(roleTarget.id)}>
-              Promover a admin
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Edit athlete dialog */}
+      <EditAthleteDialog
+        open={editOpen}
+        athlete={editTarget}
+        plans={plans}
+        onClose={() => { setEditOpen(false); setEditTarget(null); }}
+        onSaved={() => { setEditOpen(false); setEditTarget(null); load(); }}
+      />
     </div>
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  tone,
+function EditAthleteDialog({
+  open, athlete, plans, onClose, onSaved,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
+  open: boolean; athlete: Athlete | null; plans: Plan[];
+  onClose: () => void; onSaved: () => void;
+}) {
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [joinedAt, setJoinedAt] = useState("");
+  const [planId, setPlanId] = useState<string>("");
+  const [manualStatus, setManualStatus] = useState<string>("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!athlete) return;
+    setFullName(athlete.full_name);
+    setPhone(athlete.phone ?? "");
+    setEmail(athlete.email ?? "");
+    setBirthDate(athlete.birth_date ?? "");
+    setJoinedAt(athlete.joined_at ?? "");
+    setPlanId(athlete.plan_id ?? "");
+    setManualStatus(athlete.manual_status ?? "");
+    setNotes(athlete.notes ?? "");
+  }, [athlete]);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!athlete) return;
+    setSaving(true);
+    const { error } = await supabase.from("athletes").update({
+      full_name: fullName,
+      phone: phone || null,
+      email: email || null,
+      birth_date: birthDate || null,
+      joined_at: joinedAt || null,
+      plan_id: planId || null,
+      manual_status: (manualStatus || null) as ManualStatus | null,
+      notes: notes || null,
+    }).eq("id", athlete.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Atleta atualizado!");
+    onSaved();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <form onSubmit={save}>
+          <DialogHeader>
+            <DialogTitle>Editar atleta</DialogTitle>
+            <DialogDescription>{athlete?.full_name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            <div><Label>Nome completo</Label><Input required value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>WhatsApp</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+              <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Aniversário</Label><Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} /></div>
+              <div><Label>Entrada</Label><Input type="date" value={joinedAt} onChange={(e) => setJoinedAt(e.target.value)} /></div>
+            </div>
+            <div>
+              <Label>Plano</Label>
+              <Select value={planId} onValueChange={setPlanId}>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {plans.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name} — {formatCurrency(Number(p.price))}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Status manual (sobrescreve cálculo)</Label>
+              <Select value={manualStatus || "none"} onValueChange={(v) => setManualStatus(v === "none" ? "" : v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Nenhum (calcular)</SelectItem>
+                  <SelectItem value="isento">Isento</SelectItem>
+                  <SelectItem value="doente">Doente</SelectItem>
+                  <SelectItem value="saiu">Saiu</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Observações</Label><Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={saving}>{saving ? <Loader2 className="size-4 animate-spin" /> : "Salvar"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StatCard({ icon, label, value, tone }: {
+  icon: React.ReactNode; label: string; value: string | number;
   tone: "primary" | "success" | "destructive" | "accent";
 }) {
   const tones: Record<string, string> = {
@@ -446,15 +514,9 @@ function StatCard({
   };
   return (
     <div className="glass rounded-2xl p-5">
-      <div className={`size-10 rounded-xl grid place-items-center mb-3 ${tones[tone]}`}>
-        {icon}
-      </div>
-      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p className="font-heading text-2xl font-extrabold text-ocean-deep tabular-nums mt-1">
-        {value}
-      </p>
+      <div className={`size-10 rounded-xl grid place-items-center mb-3 ${tones[tone]}`}>{icon}</div>
+      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="font-heading text-2xl font-extrabold text-ocean-deep tabular-nums mt-1">{value}</p>
     </div>
   );
 }
