@@ -36,6 +36,7 @@ interface MemberRow {
   payments: { reference_month: string; paid_at: string; amount: number }[];
 }
 
+
 interface Plan {
   id: string;
   name: string;
@@ -68,13 +69,12 @@ export default function Admin() {
   }, []);
 
   const load = useCallback(async () => {
-    const [membersRes, plansRes, settingsRes] = await Promise.all([
+    const [membersRes, paymentsRes, plansRes, settingsRes] = await Promise.all([
       supabase
         .from("profiles")
-        .select(
-          "id, full_name, phone, joined_at, plan_id, plans(name, price), payments(reference_month, paid_at, amount)",
-        )
+        .select("id, full_name, phone, joined_at, plan_id, plans(name, price)")
         .order("full_name"),
+      supabase.from("payments").select("user_id, reference_month, paid_at, amount"),
       supabase.from("plans").select("id, name, price, frequency_per_week").order("frequency_per_week"),
       supabase.from("group_settings").select("grace_days, group_name").eq("id", 1).maybeSingle(),
     ]);
@@ -83,10 +83,24 @@ export default function Admin() {
     setGraceDays(grace);
     setGroupName(settingsRes.data?.group_name ?? "");
 
-    const list = ((membersRes.data ?? []) as MemberRow[]).map((m) => ({
-      ...m,
-      status: computeStatus(m.payments ?? [], grace, m.joined_at),
-    }));
+    const paymentsByUser = new Map<string, MemberRow["payments"]>();
+    for (const p of (paymentsRes.data ?? []) as Array<{
+      user_id: string;
+      reference_month: string;
+      paid_at: string;
+      amount: number;
+    }>) {
+      const arr = paymentsByUser.get(p.user_id) ?? [];
+      arr.push({ reference_month: p.reference_month, paid_at: p.paid_at, amount: p.amount });
+      paymentsByUser.set(p.user_id, arr);
+    }
+
+    const list = ((membersRes.data ?? []) as Omit<MemberRow, "payments">[]).map(
+      (m): MemberRow & { status: StatusInfo } => {
+        const pays = paymentsByUser.get(m.id) ?? [];
+        return { ...m, payments: pays, status: computeStatus(pays, grace, m.joined_at) };
+      },
+    );
     setMembers(list);
     setPlans((plansRes.data ?? []) as Plan[]);
     setLoading(false);
