@@ -16,19 +16,25 @@ export type Database = {
     Tables: {
       group_settings: {
         Row: {
+          charge_days: number
           grace_days: number
           group_name: string
           id: number
+          inactive_days: number
         }
         Insert: {
+          charge_days?: number
           grace_days?: number
           group_name?: string
           id?: number
+          inactive_days?: number
         }
         Update: {
+          charge_days?: number
           grace_days?: number
           group_name?: string
           id?: number
+          inactive_days?: number
         }
         Relationships: []
       }
@@ -37,6 +43,7 @@ export type Database = {
           amount: number
           created_at: string
           created_by: string | null
+          due_date: string | null
           id: string
           method: string | null
           notes: string | null
@@ -48,6 +55,7 @@ export type Database = {
           amount: number
           created_at?: string
           created_by?: string | null
+          due_date?: string | null
           id?: string
           method?: string | null
           notes?: string | null
@@ -59,6 +67,7 @@ export type Database = {
           amount?: number
           created_at?: string
           created_by?: string | null
+          due_date?: string | null
           id?: string
           method?: string | null
           notes?: string | null
@@ -73,7 +82,8 @@ export type Database = {
           active: boolean
           created_at: string
           description: string | null
-          frequency_per_week: number
+          duration_months: number
+          frequency_per_week: number | null
           id: string
           name: string
           price: number
@@ -82,7 +92,8 @@ export type Database = {
           active?: boolean
           created_at?: string
           description?: string | null
-          frequency_per_week: number
+          duration_months?: number
+          frequency_per_week?: number | null
           id?: string
           name: string
           price: number
@@ -91,7 +102,8 @@ export type Database = {
           active?: boolean
           created_at?: string
           description?: string | null
-          frequency_per_week?: number
+          duration_months?: number
+          frequency_per_week?: number | null
           id?: string
           name?: string
           price?: number
@@ -106,6 +118,8 @@ export type Database = {
           full_name: string
           id: string
           joined_at: string
+          manual_status: Database["public"]["Enums"]["manual_status"] | null
+          notes: string | null
           phone: string | null
           plan_id: string | null
           updated_at: string
@@ -117,6 +131,8 @@ export type Database = {
           full_name?: string
           id: string
           joined_at?: string
+          manual_status?: Database["public"]["Enums"]["manual_status"] | null
+          notes?: string | null
           phone?: string | null
           plan_id?: string | null
           updated_at?: string
@@ -128,6 +144,8 @@ export type Database = {
           full_name?: string
           id?: string
           joined_at?: string
+          manual_status?: Database["public"]["Enums"]["manual_status"] | null
+          notes?: string | null
           phone?: string | null
           plan_id?: string | null
           updated_at?: string
@@ -178,6 +196,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "member"
+      manual_status: "isento" | "saiu" | "doente"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -306,6 +325,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "member"],
+      manual_status: ["isento", "saiu", "doente"],
     },
   },
 } as const
