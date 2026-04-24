@@ -13,7 +13,33 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        heading: ["Plus Jakarta Sans", "sans-serif"],
+        body: ["Outfit", "sans-serif"],
+      },
+      backgroundImage: {
+        "gradient-water": "var(--gradient-water)",
+        "gradient-aqua": "var(--gradient-aqua)",
+        "gradient-sun": "var(--gradient-sun)",
+        "gradient-deep": "var(--gradient-deep)",
+      },
+      boxShadow: {
+        soft: "var(--shadow-soft)",
+        glow: "var(--shadow-glow)",
+        deep: "var(--shadow-deep)",
+      },
       colors: {
+        "ocean-deep": "hsl(var(--ocean-deep))",
+        "sun-flare": "hsl(var(--sun-flare))",
+        "sand-light": "hsl(var(--sand-light))",
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
