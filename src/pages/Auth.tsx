@@ -90,7 +90,7 @@ export default function Auth() {
             <Logo size="lg" />
           </div>
           <h1 className="font-heading text-3xl font-extrabold text-ocean-deep mb-2">
-            Sua quadra, seus jogos.
+            Seu point, seus jogos.
           </h1>
           <p className="text-muted-foreground">
             Acompanhe sua mensalidade e jogue tranquilo.
