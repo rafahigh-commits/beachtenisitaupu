@@ -53,7 +53,7 @@ const STATUS_FILTERS: { value: Status | "all"; label: string }[] = [
   { value: "all", label: "Todos" },
   { value: "active", label: "Em dia" },
   { value: "warning", label: "Vence em breve" },
-  { value: "charge", label: "Em cobrança" },
+  { value: "charge", label: "Atrasado" },
   { value: "inactive", label: "Inativos" },
   { value: "exempt", label: "Isentos" },
   { value: "sick", label: "Doentes" },
@@ -319,9 +319,9 @@ export default function Admin() {
                   <Input id="group-name" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
                 </div>
                 <div>
-                  <Label htmlFor="charge">Dias para entrar em cobrança</Label>
+                  <Label htmlFor="charge">Dias para entrar em atraso</Label>
                   <Input id="charge" type="number" min={0} value={chargeDays} onChange={(e) => setChargeDays(Number(e.target.value))} />
-                  <p className="text-xs text-muted-foreground mt-1">Após X dias do vencimento o atleta entra em cobrança.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Após X dias do vencimento o atleta entra em atraso.</p>
                 </div>
                 <div>
                   <Label htmlFor="inactive">Dias para virar inativo</Label>

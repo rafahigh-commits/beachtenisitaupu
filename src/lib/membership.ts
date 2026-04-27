@@ -85,7 +85,7 @@ export function computeStatus(
     return { status: "warning", label: "Vence em breve", daysSinceDue, lastDueDate: due, lastPayment: last };
   }
   if (daysSinceDue <= inactiveDays) {
-    return { status: "charge", label: "Em cobrança", daysSinceDue, lastDueDate: due, lastPayment: last };
+    return { status: "charge", label: "Atrasado", daysSinceDue, lastDueDate: due, lastPayment: last };
   }
   return { status: "inactive", label: "Inativo", daysSinceDue, lastDueDate: due, lastPayment: last };
 }
