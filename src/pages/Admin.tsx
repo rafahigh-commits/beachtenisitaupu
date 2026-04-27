@@ -271,6 +271,11 @@ export default function Admin() {
                         <p className="text-xs text-muted-foreground truncate">
                           {a.plans?.name ?? "Sem plano"} · {a.phone ?? "sem WhatsApp"}
                         </p>
+                        {a.notes && (
+                          <p className="text-xs text-muted-foreground/80 italic truncate mt-0.5" title={a.notes}>
+                            📝 {a.notes}
+                          </p>
+                        )}
                       </div>
                     </div>
 
