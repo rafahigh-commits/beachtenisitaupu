@@ -302,15 +302,7 @@ export default function Admin() {
           <TabsContent value="plans">
             <div className="glass rounded-[32px] p-6 md:p-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {plans.map((p) => (
-                <div key={p.id} className="bg-white/70 rounded-2xl p-5 border border-border/50">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
-                    {p.duration_months === 1 ? "Mensal" : `${p.duration_months} meses`}
-                  </p>
-                  <h3 className="font-heading text-lg font-extrabold text-ocean-deep">{p.name}</h3>
-                  <p className="font-heading text-2xl font-extrabold text-refract mt-2">
-                    {formatCurrency(Number(p.price))}
-                  </p>
-                </div>
+                <PlanCard key={p.id} plan={p} onSaved={load} />
               ))}
             </div>
           </TabsContent>
