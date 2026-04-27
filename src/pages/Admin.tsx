@@ -302,15 +302,7 @@ export default function Admin() {
           <TabsContent value="plans">
             <div className="glass rounded-[32px] p-6 md:p-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {plans.map((p) => (
-                <div key={p.id} className="bg-white/70 rounded-2xl p-5 border border-border/50">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
-                    {p.duration_months === 1 ? "Mensal" : `${p.duration_months} meses`}
-                  </p>
-                  <h3 className="font-heading text-lg font-extrabold text-ocean-deep">{p.name}</h3>
-                  <p className="font-heading text-2xl font-extrabold text-refract mt-2">
-                    {formatCurrency(Number(p.price))}
-                  </p>
-                </div>
+                <PlanCard key={p.id} plan={p} onSaved={load} />
               ))}
             </div>
           </TabsContent>
@@ -504,6 +496,83 @@ function EditAthleteDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function PlanCard({ plan, onSaved }: { plan: Plan; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(plan.name);
+  const [price, setPrice] = useState(String(plan.price));
+  const [months, setMonths] = useState(String(plan.duration_months));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setName(plan.name);
+    setPrice(String(plan.price));
+    setMonths(String(plan.duration_months));
+  }, [plan]);
+
+  async function save() {
+    setSaving(true);
+    const { error } = await supabase
+      .from("plans")
+      .update({
+        name,
+        price: Number(price),
+        duration_months: Number(months),
+      })
+      .eq("id", plan.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("Plano atualizado!");
+    setEditing(false);
+    onSaved();
+  }
+
+  if (editing) {
+    return (
+      <div className="bg-white/80 rounded-2xl p-5 border border-primary/40 space-y-3">
+        <div>
+          <Label className="text-[10px]">Nome</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-[10px]">Preço (R$)</Label>
+            <Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-[10px]">Meses</Label>
+            <Input type="number" min={1} value={months} onChange={(e) => setMonths(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <Button size="sm" onClick={save} disabled={saving} className="flex-1">
+            {saving ? <Loader2 className="size-4 animate-spin" /> : "Salvar"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white/70 rounded-2xl p-5 border border-border/50 group relative">
+      <button
+        onClick={() => setEditing(true)}
+        className="absolute top-3 right-3 size-7 rounded-lg bg-white/60 hover:bg-primary hover:text-primary-foreground grid place-items-center transition-colors"
+        aria-label="Editar plano"
+      >
+        <Pencil className="size-3" />
+      </button>
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
+        {plan.duration_months === 1 ? "Mensal" : `${plan.duration_months} meses`}
+      </p>
+      <h3 className="font-heading text-lg font-extrabold text-ocean-deep">{plan.name}</h3>
+      <p className="font-heading text-2xl font-extrabold text-refract mt-2">
+        {formatCurrency(Number(plan.price))}
+      </p>
+    </div>
   );
 }
 
