@@ -76,7 +76,8 @@ export default function Admin() {
   const [payMonth, setPayMonth] = useState("");
   const [payDate, setPayDate] = useState("");
   const [payDueDate, setPayDueDate] = useState("");
-  const [payMethod, setPayMethod] = useState("PIX");
+  const [paySelectedPlanId, setPaySelectedPlanId] = useState<string>("custom");
+  const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
   const [paySaving, setPaySaving] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
@@ -157,23 +158,92 @@ export default function Admin() {
 
   function openPayDialog(a: Athlete) {
     setPayTarget(a);
-    setPayAmount(String(a.plans?.price ?? ""));
+    // Pré-seleciona plano do atleta, se houver
+    const planId = a.plan_id && plans.some((p) => p.id === a.plan_id) ? a.plan_id : "custom";
+    setPaySelectedPlanId(planId);
+    if (planId !== "custom") {
+      const p = plans.find((pl) => pl.id === planId);
+      setPayAmount(p ? String(p.price) : "");
+    } else {
+      setPayAmount(String(a.plans?.price ?? ""));
+    }
     setPayMonth("");
     setPayDate("");
-    // sugere validade baseada no plano
-    const months = a.plans?.duration_months ?? 1;
-    const due = new Date();
-    due.setMonth(due.getMonth() + months);
+    setPayDueDate("");
+    setPayReceiptFile(null);
+    setPayOpen(true);
+  }
+
+  function handleMonthChange(value: string) {
+    // value vem como "YYYY-MM"
+    const monthIso = value ? value + "-01" : "";
+    setPayMonth(monthIso);
+    if (!monthIso) {
+      setPayDueDate("");
+      return;
+    }
+    // Determina duração em meses do plano selecionado (ou do atleta, ou 1)
+    let months = 1;
+    if (paySelectedPlanId !== "custom") {
+      months = plans.find((p) => p.id === paySelectedPlanId)?.duration_months ?? 1;
+    } else {
+      months = payTarget?.plans?.duration_months ?? 1;
+    }
+    const [y, m] = value.split("-").map(Number);
+    const due = new Date(y, m - 1 + months, 1);
     due.setDate(due.getDate() - 1);
     setPayDueDate(format(due, "yyyy-MM-dd"));
-    setPayMethod("PIX");
-    setPayOpen(true);
+  }
+
+  function handlePlanSelect(planId: string) {
+    setPaySelectedPlanId(planId);
+    if (planId !== "custom") {
+      const p = plans.find((pl) => pl.id === planId);
+      if (p) setPayAmount(String(p.price));
+      // Recalcula validade se já houver mês
+      if (payMonth) {
+        const [y, m] = payMonth.split("-").map(Number);
+        const months = p?.duration_months ?? 1;
+        const due = new Date(y, m - 1 + months, 1);
+        due.setDate(due.getDate() - 1);
+        setPayDueDate(format(due, "yyyy-MM-dd"));
+      }
+    }
   }
 
   async function handleSavePayment(e: React.FormEvent) {
     e.preventDefault();
     if (!payTarget) return;
     setPaySaving(true);
+
+    let receiptPath: string | null = null;
+    if (payReceiptFile) {
+      const maxBytes = 5 * 1024 * 1024;
+      if (payReceiptFile.size > maxBytes) {
+        setPaySaving(false);
+        toast.error("Comprovante deve ter no máximo 5 MB.");
+        return;
+      }
+      const allowed = ["application/pdf"];
+      const isImage = payReceiptFile.type.startsWith("image/");
+      if (!isImage && !allowed.includes(payReceiptFile.type)) {
+        setPaySaving(false);
+        toast.error("Comprovante deve ser imagem ou PDF.");
+        return;
+      }
+      const safeName = payReceiptFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${payTarget.id}/${Date.now()}-${safeName}`;
+      const { error: upErr } = await supabase.storage
+        .from("payment-receipts")
+        .upload(path, payReceiptFile, { upsert: false, contentType: payReceiptFile.type });
+      if (upErr) {
+        setPaySaving(false);
+        toast.error("Falha ao enviar comprovante: " + upErr.message);
+        return;
+      }
+      receiptPath = path;
+    }
+
     const { data: userData } = await supabase.auth.getUser();
     const { error } = await supabase.from("payments").insert({
       athlete_id: payTarget.id,
@@ -181,7 +251,8 @@ export default function Admin() {
       reference_month: payMonth,
       paid_at: payDate,
       due_date: payDueDate || null,
-      method: payMethod,
+      method: "PIX",
+      receipt_url: receiptPath,
       created_by: userData.user?.id,
     });
     setPaySaving(false);
@@ -357,13 +428,39 @@ export default function Admin() {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
-                <Label>Valor (R$)</Label>
-                <Input type="number" step="0.01" required value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+                <Label>Plano / Valor</Label>
+                <Select value={paySelectedPlanId} onValueChange={handlePlanSelect}>
+                  <SelectTrigger><SelectValue placeholder="Selecione um plano" /></SelectTrigger>
+                  <SelectContent>
+                    {plans.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} — {formatCurrency(Number(p.price))}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Outro valor</SelectItem>
+                  </SelectContent>
+                </Select>
+                {paySelectedPlanId === "custom" && (
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="Valor (R$)"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Mês de referência</Label>
-                  <Input type="month" required value={payMonth ? payMonth.slice(0, 7) : ""} onChange={(e) => setPayMonth(e.target.value ? e.target.value + "-01" : "")} />
+                  <Input
+                    type="month"
+                    required
+                    value={payMonth ? payMonth.slice(0, 7) : ""}
+                    onChange={(e) => handleMonthChange(e.target.value)}
+                  />
                 </div>
                 <div>
                   <Label>Pago em</Label>
@@ -373,19 +470,17 @@ export default function Admin() {
               <div>
                 <Label>Validade até</Label>
                 <Input type="date" value={payDueDate} onChange={(e) => setPayDueDate(e.target.value)} />
-                <p className="text-xs text-muted-foreground mt-1">Sugerido baseado no plano. Ajuste se necessário.</p>
+                <p className="text-xs text-muted-foreground mt-1">Calculada a partir do mês de referência. Ajuste se necessário.</p>
               </div>
               <div>
-                <Label>Forma</Label>
-                <Select value={payMethod} onValueChange={setPayMethod}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PIX">PIX</SelectItem>
-                    <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                    <SelectItem value="Transferência">Transferência</SelectItem>
-                    <SelectItem value="Cartão">Cartão</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="receipt">Comprovante (opcional)</Label>
+                <Input
+                  id="receipt"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setPayReceiptFile(e.target.files?.[0] ?? null)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Imagem ou PDF, até 5 MB.</p>
               </div>
             </div>
             <DialogFooter>

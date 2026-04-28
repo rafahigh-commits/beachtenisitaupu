@@ -105,6 +105,7 @@ export type Database = {
           method: string | null
           notes: string | null
           paid_at: string
+          receipt_url: string | null
           reference_month: string
         }
         Insert: {
@@ -117,6 +118,7 @@ export type Database = {
           method?: string | null
           notes?: string | null
           paid_at?: string
+          receipt_url?: string | null
           reference_month: string
         }
         Update: {
@@ -129,6 +131,7 @@ export type Database = {
           method?: string | null
           notes?: string | null
           paid_at?: string
+          receipt_url?: string | null
           reference_month?: string
         }
         Relationships: [
