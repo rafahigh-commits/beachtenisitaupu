@@ -1,25 +1,54 @@
-## Mudanças
+## Mudanças no diálogo "Registrar pagamento" (`src/pages/Admin.tsx`)
 
-### 1. Grid de atletas (`src/pages/Admin.tsx`) — exibir "Validade até"
+### 1. Validade até — calculada a partir do "Mês de referência"
 
-Na lista de atletas, adicionar a data de vencimento (a `due_date` mais recente do banco) próximo ao status de cada atleta.
+- Ao abrir o diálogo: campo "Validade até" começa **vazio**.
+- Quando o admin preencher/alterar o **Mês de referência**, calcular automaticamente:
+  - `validade até = primeiro dia do mês de referência + duração do plano (meses) − 1 dia`
+- O admin ainda pode editar manualmente.
+- Sem plano vinculado → assume 1 mês.
 
-- Calcular a maior `due_date` dos `payments` de cada atleta (já carregados em `a.payments`).
-- Exibir como pequeno texto na área direita do card, ex.: `Validade: 26/10/2026`.
-- Se o atleta não tiver nenhum pagamento com `due_date`, exibir `Validade: —`.
-- Formatar com `date-fns` no padrão `dd/MM/yyyy`.
+### 2. Valor (R$) — opções pré-definidas dos planos
 
-Local: bloco de cada atleta (atualmente entre `StatusBadge` e os botões "Pagto" / editar, linhas ~282–295).
+Substituir o input por um `<Select>`:
+- Lista todos os `plans` ativos: `Nome do plano — R$ 120,00`.
+- Ao selecionar, preenche `payAmount` com o preço.
+- Opção **"Outro valor"** libera input numérico livre.
+- Pré-seleciona o plano atual do atleta (se houver).
 
-### 2. Diálogo "Registrar pagamento" — campos em branco por padrão
+### 3. Remover "Forma de pagamento"
 
-Em `openPayDialog` (linhas ~158–171) e nos estados iniciais (linhas ~76–77):
+- Remover o `<Select>` de método do diálogo.
+- No `insert` em `payments`, gravar fixo `method: "PIX"`.
+- Remover o estado `payMethod`.
 
-- `payMonth` (Mês de referência): iniciar como string vazia `""` em vez de `format(new Date(), "yyyy-MM-01")`.
-- `payDate` (Pago em): iniciar como string vazia `""` em vez da data de hoje.
-- O campo "Validade até" continua sendo sugerido com base no plano (comportamento atual mantido).
-- Ajustar o `<Input type="month">` para lidar com valor vazio sem quebrar o `slice(0,7)` (usar `payMonth ? payMonth.slice(0,7) : ""`).
-- Ao salvar, manter `required` nos dois campos para que o admin preencha conscientemente.
+### 4. Upload opcional de comprovante
 
-### Resumo dos arquivos
-- `src/pages/Admin.tsx`: adicionar coluna/texto de validade no card do atleta; limpar valores iniciais de "Mês de referência" e "Pago em" no diálogo de pagamento.
+Backend:
+- Criar bucket de storage **`payment-receipts`** (privado).
+- RLS em `storage.objects`:
+  - Admins podem `INSERT`/`SELECT`/`DELETE` em qualquer arquivo do bucket.
+  - Atleta pode `SELECT` apenas seus próprios comprovantes (path começa com `{athlete_id}/`).
+- Adicionar coluna `receipt_url text` (nullable) na tabela `payments`.
+
+Frontend (no diálogo, abaixo de "Validade até"):
+- Novo campo `<Input type="file" accept="image/*,application/pdf">` rotulado **"Comprovante (opcional)"**.
+- Limite 5 MB; validar tipo (imagem ou PDF).
+- Ao salvar:
+  1. Se houver arquivo, faz upload para `payment-receipts/{athlete_id}/{timestamp}-{nome-sanitizado}`.
+  2. Pega o `path` retornado e grava em `payments.receipt_url`.
+  3. Se o upload falhar, exibe erro e não registra o pagamento.
+- Limpar o arquivo selecionado ao fechar/abrir o diálogo.
+
+### Resumo técnico
+
+Arquivo: `src/pages/Admin.tsx`
+- Novos estados: `paySelectedPlanId`, `payReceiptFile`.
+- Remover estado: `payMethod`.
+- `openPayDialog`: limpar `payDueDate`, pré-selecionar plano do atleta, limpar arquivo.
+- `onChange` do mês de referência: recalcular `payDueDate` com base na duração do plano selecionado.
+- `handleSavePayment`: upload opcional → insert em `payments` com `method: "PIX"` e `receipt_url`.
+
+Migração SQL:
+- `ALTER TABLE payments ADD COLUMN receipt_url text;`
+- Criar bucket `payment-receipts` (privado) + políticas RLS.
