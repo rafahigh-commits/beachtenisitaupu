@@ -76,7 +76,8 @@ export default function Admin() {
   const [payMonth, setPayMonth] = useState("");
   const [payDate, setPayDate] = useState("");
   const [payDueDate, setPayDueDate] = useState("");
-  const [payMethod, setPayMethod] = useState("PIX");
+  const [paySelectedPlanId, setPaySelectedPlanId] = useState<string>("custom");
+  const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
   const [paySaving, setPaySaving] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
