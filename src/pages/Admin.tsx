@@ -73,8 +73,8 @@ export default function Admin() {
   const [payOpen, setPayOpen] = useState(false);
   const [payTarget, setPayTarget] = useState<Athlete | null>(null);
   const [payAmount, setPayAmount] = useState("");
-  const [payMonth, setPayMonth] = useState(format(new Date(), "yyyy-MM-01"));
-  const [payDate, setPayDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [payMonth, setPayMonth] = useState("");
+  const [payDate, setPayDate] = useState("");
   const [payDueDate, setPayDueDate] = useState("");
   const [payMethod, setPayMethod] = useState("PIX");
   const [paySaving, setPaySaving] = useState(false);
@@ -158,8 +158,8 @@ export default function Admin() {
   function openPayDialog(a: Athlete) {
     setPayTarget(a);
     setPayAmount(String(a.plans?.price ?? ""));
-    setPayMonth(format(new Date(), "yyyy-MM-01"));
-    setPayDate(format(new Date(), "yyyy-MM-dd"));
+    setPayMonth("");
+    setPayDate("");
     // sugere validade baseada no plano
     const months = a.plans?.duration_months ?? 1;
     const due = new Date();
@@ -280,12 +280,24 @@ export default function Admin() {
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap justify-end">
-                      <StatusBadge status={a.status.status} label={a.status.label} size="sm" />
-                      {a.status.lastDueDate && a.status.daysSinceDue !== null && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {a.status.daysSinceDue > 0 ? `+${a.status.daysSinceDue}d` : `${a.status.daysSinceDue}d`}
-                        </span>
-                      )}
+                      <div className="flex flex-col items-end gap-0.5">
+                        <StatusBadge status={a.status.status} label={a.status.label} size="sm" />
+                        {(() => {
+                          const dues = a.payments
+                            .map((p) => p.due_date)
+                            .filter((d): d is string => !!d)
+                            .sort();
+                          const latest = dues.length ? dues[dues.length - 1] : null;
+                          return (
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              Validade: {latest ? format(new Date(latest + "T00:00:00"), "dd/MM/yyyy") : "—"}
+                              {latest && a.status.daysSinceDue !== null && (
+                                <> · {a.status.daysSinceDue > 0 ? `+${a.status.daysSinceDue}d` : `${a.status.daysSinceDue}d`}</>
+                              )}
+                            </span>
+                          );
+                        })()}
+                      </div>
                       <Button size="sm" onClick={() => openPayDialog(a)}>
                         <Plus className="size-4 mr-1" /> Pagto
                       </Button>
@@ -351,7 +363,7 @@ export default function Admin() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Mês de referência</Label>
-                  <Input type="month" required value={payMonth.slice(0, 7)} onChange={(e) => setPayMonth(e.target.value + "-01")} />
+                  <Input type="month" required value={payMonth ? payMonth.slice(0, 7) : ""} onChange={(e) => setPayMonth(e.target.value ? e.target.value + "-01" : "")} />
                 </div>
                 <div>
                   <Label>Pago em</Label>
