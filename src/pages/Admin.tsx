@@ -428,13 +428,39 @@ export default function Admin() {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
-                <Label>Valor (R$)</Label>
-                <Input type="number" step="0.01" required value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+                <Label>Plano / Valor</Label>
+                <Select value={paySelectedPlanId} onValueChange={handlePlanSelect}>
+                  <SelectTrigger><SelectValue placeholder="Selecione um plano" /></SelectTrigger>
+                  <SelectContent>
+                    {plans.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} — {formatCurrency(Number(p.price))}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Outro valor</SelectItem>
+                  </SelectContent>
+                </Select>
+                {paySelectedPlanId === "custom" && (
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="Valor (R$)"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Mês de referência</Label>
-                  <Input type="month" required value={payMonth ? payMonth.slice(0, 7) : ""} onChange={(e) => setPayMonth(e.target.value ? e.target.value + "-01" : "")} />
+                  <Input
+                    type="month"
+                    required
+                    value={payMonth ? payMonth.slice(0, 7) : ""}
+                    onChange={(e) => handleMonthChange(e.target.value)}
+                  />
                 </div>
                 <div>
                   <Label>Pago em</Label>
@@ -444,19 +470,17 @@ export default function Admin() {
               <div>
                 <Label>Validade até</Label>
                 <Input type="date" value={payDueDate} onChange={(e) => setPayDueDate(e.target.value)} />
-                <p className="text-xs text-muted-foreground mt-1">Sugerido baseado no plano. Ajuste se necessário.</p>
+                <p className="text-xs text-muted-foreground mt-1">Calculada a partir do mês de referência. Ajuste se necessário.</p>
               </div>
               <div>
-                <Label>Forma</Label>
-                <Select value={payMethod} onValueChange={setPayMethod}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PIX">PIX</SelectItem>
-                    <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                    <SelectItem value="Transferência">Transferência</SelectItem>
-                    <SelectItem value="Cartão">Cartão</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="receipt">Comprovante (opcional)</Label>
+                <Input
+                  id="receipt"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setPayReceiptFile(e.target.files?.[0] ?? null)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Imagem ou PDF, até 5 MB.</p>
               </div>
             </div>
             <DialogFooter>
