@@ -405,6 +405,10 @@ export default function Admin() {
             </div>
           </TabsContent>
 
+          <TabsContent value="messages">
+            <MessagesTab athletes={athletes} />
+          </TabsContent>
+
           <TabsContent value="settings">
             <div className="glass rounded-[32px] p-6 md:p-8 max-w-xl">
               <div className="flex items-center gap-2 mb-6">
