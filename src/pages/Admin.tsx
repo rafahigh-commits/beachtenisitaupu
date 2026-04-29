@@ -342,6 +342,17 @@ export default function Admin() {
                         <p className="text-xs text-muted-foreground truncate">
                           {a.plans?.name ?? "Sem plano"} · {a.phone ?? "sem WhatsApp"}
                         </p>
+                        {(() => {
+                          const last = [...a.payments].sort((x, y) => y.paid_at.localeCompare(x.paid_at))[0];
+                          return (
+                            <p className="text-xs text-muted-foreground truncate">
+                              Último pagto:{" "}
+                              {last
+                                ? `${format(new Date(last.paid_at + "T00:00:00"), "dd/MM/yyyy")} · ${formatCurrency(last.amount)}`
+                                : "—"}
+                            </p>
+                          );
+                        })()}
                         {a.notes && (
                           <p className="text-xs text-muted-foreground/80 italic truncate mt-0.5" title={a.notes}>
                             📝 {a.notes}
