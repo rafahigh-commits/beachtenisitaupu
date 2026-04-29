@@ -1,54 +1,31 @@
-## Mudanças no diálogo "Registrar pagamento" (`src/pages/Admin.tsx`)
+## Mostrar último pagamento no card do atleta
 
-### 1. Validade até — calculada a partir do "Mês de referência"
+Na grid de atletas (aba "Atletas" do Admin), exibir ao lado do nome:
+- **Data do último pagamento** (campo `paid_at` mais recente)
+- **Valor do último pagamento** (campo `amount` correspondente)
 
-- Ao abrir o diálogo: campo "Validade até" começa **vazio**.
-- Quando o admin preencher/alterar o **Mês de referência**, calcular automaticamente:
-  - `validade até = primeiro dia do mês de referência + duração do plano (meses) − 1 dia`
-- O admin ainda pode editar manualmente.
-- Sem plano vinculado → assume 1 mês.
+### Onde
 
-### 2. Valor (R$) — opções pré-definidas dos planos
+Arquivo: `src/pages/Admin.tsx`, dentro do bloco que renderiza cada atleta (linhas ~340–350, abaixo do nome e do "Plano · WhatsApp").
 
-Substituir o input por um `<Select>`:
-- Lista todos os `plans` ativos: `Nome do plano — R$ 120,00`.
-- Ao selecionar, preenche `payAmount` com o preço.
-- Opção **"Outro valor"** libera input numérico livre.
-- Pré-seleciona o plano atual do atleta (se houver).
+### Como
 
-### 3. Remover "Forma de pagamento"
+1. Calcular o último pagamento ordenando `a.payments` por `paid_at` desc e pegando o primeiro.
+2. Adicionar uma linha logo abaixo do "plano · telefone" com o formato:
+   - `Último pagto: 15/04/2026 · R$ 120,00`
+   - Se não houver pagamentos: `Último pagto: —`
+3. Usar `formatCurrency` (já importado de `@/lib/membership`) e `format` do `date-fns` (já importado) com a máscara `dd/MM/yyyy`.
+4. Estilo consistente com as outras infos secundárias: `text-xs text-muted-foreground`.
 
-- Remover o `<Select>` de método do diálogo.
-- No `insert` em `payments`, gravar fixo `method: "PIX"`.
-- Remover o estado `payMethod`.
+### Layout resultante (mobile e desktop)
 
-### 4. Upload opcional de comprovante
+```text
+[AV] Nome do Atleta
+     Plano Mensal · (47) 99999-9999
+     Último pagto: 15/04/2026 · R$ 120,00
+     📝 nota (se houver)
+```
 
-Backend:
-- Criar bucket de storage **`payment-receipts`** (privado).
-- RLS em `storage.objects`:
-  - Admins podem `INSERT`/`SELECT`/`DELETE` em qualquer arquivo do bucket.
-  - Atleta pode `SELECT` apenas seus próprios comprovantes (path começa com `{athlete_id}/`).
-- Adicionar coluna `receipt_url text` (nullable) na tabela `payments`.
+A informação de "Validade" continua na coluna da direita junto ao status, sem alterações.
 
-Frontend (no diálogo, abaixo de "Validade até"):
-- Novo campo `<Input type="file" accept="image/*,application/pdf">` rotulado **"Comprovante (opcional)"**.
-- Limite 5 MB; validar tipo (imagem ou PDF).
-- Ao salvar:
-  1. Se houver arquivo, faz upload para `payment-receipts/{athlete_id}/{timestamp}-{nome-sanitizado}`.
-  2. Pega o `path` retornado e grava em `payments.receipt_url`.
-  3. Se o upload falhar, exibe erro e não registra o pagamento.
-- Limpar o arquivo selecionado ao fechar/abrir o diálogo.
-
-### Resumo técnico
-
-Arquivo: `src/pages/Admin.tsx`
-- Novos estados: `paySelectedPlanId`, `payReceiptFile`.
-- Remover estado: `payMethod`.
-- `openPayDialog`: limpar `payDueDate`, pré-selecionar plano do atleta, limpar arquivo.
-- `onChange` do mês de referência: recalcular `payDueDate` com base na duração do plano selecionado.
-- `handleSavePayment`: upload opcional → insert em `payments` com `method: "PIX"` e `receipt_url`.
-
-Migração SQL:
-- `ALTER TABLE payments ADD COLUMN receipt_url text;`
-- Criar bucket `payment-receipts` (privado) + políticas RLS.
+Nenhuma mudança de banco, query ou tipo é necessária — `paid_at` e `amount` já vêm em `a.payments`.
