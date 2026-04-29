@@ -15,8 +15,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Loader2, Plus, Search, Users, DollarSign, AlertTriangle,
-  CheckCircle2, Settings, UserCog, Pencil,
+  CheckCircle2, Settings, UserCog, Pencil, MessageSquare,
 } from "lucide-react";
+import { MessagesTab } from "@/components/admin/MessagesTab";
 import {
   computeStatus, formatCurrency, formatMonth,
   type StatusInfo, type ManualStatus, type Status,
@@ -300,9 +301,12 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="members">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap h-auto">
             <TabsTrigger value="members">Atletas</TabsTrigger>
             <TabsTrigger value="plans">Planos</TabsTrigger>
+            <TabsTrigger value="messages">
+              <MessageSquare className="size-4 mr-1.5" /> Comunicações
+            </TabsTrigger>
             <TabsTrigger value="settings">Configurações</TabsTrigger>
           </TabsList>
 
@@ -399,6 +403,10 @@ export default function Admin() {
                 <PlanCard key={p.id} plan={p} onSaved={load} />
               ))}
             </div>
+          </TabsContent>
+
+          <TabsContent value="messages">
+            <MessagesTab athletes={athletes} />
           </TabsContent>
 
           <TabsContent value="settings">
