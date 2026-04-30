@@ -1,71 +1,35 @@
-## Página de Comunicações (Admin)
+## Adicionar atletas no painel admin
 
-Nova área para criar templates de mensagem e disparar via WhatsApp (link `wa.me`) para atletas filtrados por status.
+Atualmente a aba "Atletas" só permite editar quem já está cadastrado. Vou adicionar a capacidade de criar novos atletas.
 
-### Fluxo do usuário
+### Mudanças
 
-1. Admin acessa **Painel Admin → aba "Comunicações"**.
-2. **Templates**: cria/edita/exclui mensagens reutilizáveis com variáveis `{{nome}}`, `{{vencimento}}`, `{{valor}}`.
-3. **Enviar mensagem**:
-   - Escolhe um template (ou escreve direto) — preview com variáveis substituídas.
-   - Filtra grupo de atletas por **status** (Em dia, Vence em breve, Atrasado, Inativo, Isento, Doente, Saiu, Novo, ou Todos).
-   - Lista resultante aparece com **checkbox por atleta** (todos marcados por padrão; toggle "selecionar todos"). Mostra nome, status e telefone. Atletas sem telefone aparecem desabilitados com aviso.
-   - Botão **"Abrir conversas no WhatsApp"** itera pelos selecionados e abre `https://wa.me/<telefone>?text=<mensagem>` em novas abas, com a mensagem já personalizada por atleta.
+**1. Botão "Novo atleta"** no topo da aba Atletas (`src/pages/Admin.tsx`), ao lado dos filtros de busca/status.
 
-### Backend (Lovable Cloud)
+**2. Reaproveitar o `EditAthleteDialog`** transformando-o em `AthleteFormDialog` que funciona em dois modos:
+- **Criar** (sem `athlete` passado): insere novo registro em `athletes` e mostra "Novo atleta" no título.
+- **Editar** (com `athlete` passado): mantém o comportamento atual.
 
-Nova tabela `message_templates`:
+Campos do formulário (mesmos da edição):
+- Nome completo (obrigatório)
+- WhatsApp, Email
+- Aniversário, Data de entrada (default: hoje na criação)
+- Plano
+- Status manual
+- Observações
 
-```text
-id              uuid pk
-name            text not null
-body            text not null   -- com {{nome}}, {{vencimento}}, {{valor}}
-created_by      uuid
-created_at      timestamptz default now()
-updated_at      timestamptz default now()
-```
+**3. Insert no Supabase** usando a tabela `athletes` (já tem RLS "Admins gerenciam atletas"). Campos opcionais enviados como `null` se vazios. `user_id` fica `null` (atleta sem login vinculado) — admin pode vincular depois.
 
-RLS: apenas admins gerenciam (mesma política de `plans`). Trigger `set_updated_at`.
+**4. Após salvar**, recarrega a lista (`load()`) e fecha o diálogo, igual ao fluxo de edição.
 
-Nenhuma alteração nas tabelas existentes. Telefones já estão em `athletes.phone`.
+### Detalhes técnicos
 
-### Frontend
-
-Arquivo novo: `src/pages/AdminMessages.tsx` — ou nova `TabsContent value="messages"` dentro de `src/pages/Admin.tsx` (preferido para manter a navegação por abas já existente: Atletas / Planos / Configurações / **Comunicações**).
-
-Estrutura interna da aba:
-
-- **Card "Templates"**: lista de templates com botões Editar/Excluir e CTA "Novo template" (Dialog com nome + textarea + chips clicáveis para inserir variáveis no cursor).
-- **Card "Enviar mensagem"**:
-  - Select de template (ou "Mensagem livre").
-  - Textarea editável (pré-preenchida pelo template) com chips de variáveis.
-  - Select de status (reusa `STATUS_FILTERS` já existente).
-  - Lista de atletas filtrados com checkbox + ações "Marcar todos / Desmarcar todos".
-  - Preview do primeiro selecionado renderizado com variáveis aplicadas.
-  - Botão **"Abrir no WhatsApp"** → para cada selecionado: `window.open(\`https://wa.me/${onlyDigits(phone)}?text=${encodeURIComponent(render(body, athlete))}\`, "_blank")`. Pequeno delay (~300ms) entre aberturas para evitar bloqueio de pop-up. Toast informa "Abrindo X conversas — permita pop-ups se necessário".
-
-### Substituição de variáveis (helper)
-
-Função `renderTemplate(body, athlete)` em `src/lib/messageTemplate.ts`:
-
-- `{{nome}}` → primeiro nome de `full_name`
-- `{{vencimento}}` → `format(status.lastDueDate, "dd/MM/yyyy")` ou "—"
-- `{{valor}}` → `formatCurrency(plan.price)` ou "—"
-
-### Normalização de telefone
-
-Helper `toWhatsappNumber(phone)`:
-- Remove tudo que não é dígito.
-- Se não começar com `55` (Brasil) e tiver 10–11 dígitos, prefixa `55`.
-- Retorna `null` se ficar inválido (impede envio).
-
-### Observações
-
-- Como é click-to-chat, o WhatsApp do **admin** é quem envia — não há custo nem template Meta. Para grandes volumes (>20 atletas) o admin precisará confirmar pop-ups e clicar "Enviar" em cada conversa que abrir.
-- Migração futura para Twilio/Cloud API fica fácil: basta trocar a função de envio mantendo templates e seleção.
+- Estado novo no `Admin`: `createOpen` (boolean) para abrir o diálogo em modo criação.
+- O diálogo detecta o modo pelo `athlete` ser `null` e troca o handler de submit (`insert` vs `update`).
+- Toast: "Atleta cadastrado!" no sucesso.
 
 ### Arquivos
 
-- **Migração**: criar tabela `message_templates` + RLS + trigger updated_at.
-- **Novo**: `src/lib/messageTemplate.ts` (render + normalize phone).
-- **Editado**: `src/pages/Admin.tsx` — adicionar `TabsTrigger value="messages"` e `TabsContent` com os dois cards e seus dialogs/estados.
+- `src/pages/Admin.tsx` — adicionar botão "Novo atleta", estado `createOpen`, e adaptar `EditAthleteDialog` para suportar criação.
+
+Sem migração de banco — a tabela `athletes` já existe e tem as policies certas.
