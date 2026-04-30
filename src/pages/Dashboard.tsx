@@ -177,12 +177,12 @@ export default function Dashboard() {
           </section>
 
           <aside className="col-span-12 lg:col-span-4">
-            <div className="bg-gradient-deep text-primary-foreground rounded-[40px] p-8 relative overflow-hidden h-full">
-              <div className="blur-orb size-40 bg-primary/40 -top-10 -right-10" />
-              <h3 className="font-heading text-2xl font-extrabold mb-1">Resumo</h3>
-              <p className="text-white/50 text-sm mb-8">Sua jornada no clube</p>
+            <div className="glass rounded-[40px] p-8 relative overflow-hidden h-full">
+              <div className="blur-orb size-40 bg-primary/20 -top-10 -right-10" />
+              <h3 className="font-heading text-2xl font-extrabold text-ocean-deep mb-1 relative">Resumo</h3>
+              <p className="text-muted-foreground text-sm mb-8 relative">Sua jornada no clube</p>
 
-              <div className="space-y-6 relative">
+              <div className="space-y-5 relative">
                 <Stat label="Total contribuído" value={formatCurrency(totalPaid)} />
                 <Stat
                   label="Atleta desde"
@@ -251,9 +251,9 @@ function InfoCard({ icon, label, value, hint }: { icon: React.ReactNode; label: 
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-end justify-between border-b border-white/10 pb-4 last:border-0">
-      <span className="text-sm text-white/60">{label}</span>
-      <span className="font-heading font-bold tabular-nums">{value}</span>
+    <div className="flex items-end justify-between border-b border-border/40 pb-3 last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="font-heading font-bold tabular-nums text-ocean-deep">{value}</span>
     </div>
   );
 }
