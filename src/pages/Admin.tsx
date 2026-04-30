@@ -682,6 +682,32 @@ function EditAthleteDialog({
               </Select>
             </div>
             <div><Label>Observações</Label><Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+            {!isCreate && (
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Conta vinculada</Label>
+                {linkedUserId ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm">
+                      <span className="text-success font-semibold">Vinculado</span>
+                      <span className="text-muted-foreground"> · {linkedUserId.slice(0, 8)}…</span>
+                    </p>
+                    <Button type="button" size="sm" variant="outline" onClick={unlink} disabled={linking}>
+                      Desvincular
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm text-muted-foreground">Nenhuma conta vinculada.</p>
+                    <Button type="button" size="sm" onClick={linkByEmail} disabled={linking || !email}>
+                      {linking ? <Loader2 className="size-4 animate-spin" /> : "Vincular por email"}
+                    </Button>
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Busca um usuário cadastrado com este email e liga ao atleta. A vinculação também acontece automaticamente quando o atleta cria conta.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
