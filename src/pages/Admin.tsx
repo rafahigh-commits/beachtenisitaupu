@@ -551,6 +551,8 @@ function EditAthleteDialog({
   const [manualStatus, setManualStatus] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [linkedUserId, setLinkedUserId] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -563,6 +565,7 @@ function EditAthleteDialog({
       setPlanId(athlete.plan_id ?? "");
       setManualStatus(athlete.manual_status ?? "");
       setNotes(athlete.notes ?? "");
+      setLinkedUserId(athlete.user_id ?? null);
     } else {
       setFullName("");
       setPhone("");
@@ -572,8 +575,46 @@ function EditAthleteDialog({
       setPlanId("");
       setManualStatus("");
       setNotes("");
+      setLinkedUserId(null);
     }
   }, [athlete, open]);
+
+  async function linkByEmail() {
+    if (!athlete) return;
+    const target = (email || athlete.email || "").trim();
+    if (!target) { toast.error("Informe um email para buscar."); return; }
+    setLinking(true);
+    const { data, error } = await supabase.rpc("find_user_by_email", { _email: target });
+    if (error) { setLinking(false); toast.error(error.message); return; }
+    if (!data) {
+      setLinking(false);
+      toast.error("Nenhuma conta encontrada com esse email.");
+      return;
+    }
+    const { error: updErr } = await supabase
+      .from("athletes")
+      .update({ user_id: data as string })
+      .eq("id", athlete.id);
+    setLinking(false);
+    if (updErr) { toast.error(updErr.message); return; }
+    setLinkedUserId(data as string);
+    toast.success("Conta vinculada!");
+    onSaved();
+  }
+
+  async function unlink() {
+    if (!athlete) return;
+    setLinking(true);
+    const { error } = await supabase
+      .from("athletes")
+      .update({ user_id: null })
+      .eq("id", athlete.id);
+    setLinking(false);
+    if (error) { toast.error(error.message); return; }
+    setLinkedUserId(null);
+    toast.success("Conta desvinculada.");
+    onSaved();
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -641,6 +682,32 @@ function EditAthleteDialog({
               </Select>
             </div>
             <div><Label>Observações</Label><Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+            {!isCreate && (
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Conta vinculada</Label>
+                {linkedUserId ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm">
+                      <span className="text-success font-semibold">Vinculado</span>
+                      <span className="text-muted-foreground"> · {linkedUserId.slice(0, 8)}…</span>
+                    </p>
+                    <Button type="button" size="sm" variant="outline" onClick={unlink} disabled={linking}>
+                      Desvincular
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm text-muted-foreground">Nenhuma conta vinculada.</p>
+                    <Button type="button" size="sm" onClick={linkByEmail} disabled={linking || !email}>
+                      {linking ? <Loader2 className="size-4 animate-spin" /> : "Vincular por email"}
+                    </Button>
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Busca um usuário cadastrado com este email e liga ao atleta. A vinculação também acontece automaticamente quando o atleta cria conta.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>

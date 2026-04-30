@@ -1,35 +1,62 @@
-## Adicionar atletas no painel admin
+## Vincular conta de usuário ao atleta automaticamente
 
-Atualmente a aba "Atletas" só permite editar quem já está cadastrado. Vou adicionar a capacidade de criar novos atletas.
+### Problema
 
-### Mudanças
+Quando um atleta faz signup (ou já tem conta) com o mesmo email cadastrado na tabela `athletes`, os dois registros não são ligados. Exemplo confirmado no banco:
 
-**1. Botão "Novo atleta"** no topo da aba Atletas (`src/pages/Admin.tsx`), ao lado dos filtros de busca/status.
+- `auth.users`: `sfterra.rafael@gmail.com` → user_id `7267e434-...`
+- `athletes`: `sfterra.rafael@gmail.com` → user_id `NULL` (não vinculado)
 
-**2. Reaproveitar o `EditAthleteDialog`** transformando-o em `AthleteFormDialog` que funciona em dois modos:
-- **Criar** (sem `athlete` passado): insere novo registro em `athletes` e mostra "Novo atleta" no título.
-- **Editar** (com `athlete` passado): mantém o comportamento atual.
+A função `handle_new_user` hoje só cria o `profile` e o role `member` — ignora a tabela `athletes`.
 
-Campos do formulário (mesmos da edição):
-- Nome completo (obrigatório)
-- WhatsApp, Email
-- Aniversário, Data de entrada (default: hoje na criação)
-- Plano
-- Status manual
-- Observações
+Resultado: o atleta loga, mas o painel não reconhece que ele é o mesmo da lista, então ele não enxerga seus dados/pagamentos.
 
-**3. Insert no Supabase** usando a tabela `athletes` (já tem RLS "Admins gerenciam atletas"). Campos opcionais enviados como `null` se vazios. `user_id` fica `null` (atleta sem login vinculado) — admin pode vincular depois.
+### Solução
 
-**4. Após salvar**, recarrega a lista (`load()`) e fecha o diálogo, igual ao fluxo de edição.
+#### 1. Vinculação automática no signup (banco)
 
-### Detalhes técnicos
+Atualizar a função `handle_new_user()` para, além de criar profile e role, fazer:
 
-- Estado novo no `Admin`: `createOpen` (boolean) para abrir o diálogo em modo criação.
-- O diálogo detecta o modo pelo `athlete` ser `null` e troca o handler de submit (`insert` vs `update`).
-- Toast: "Atleta cadastrado!" no sucesso.
+```sql
+UPDATE public.athletes
+SET user_id = NEW.id
+WHERE user_id IS NULL
+  AND lower(email) = lower(NEW.email);
+```
+
+Isso garante que qualquer signup novo com email batendo com um atleta cadastrado vincula automaticamente.
+
+#### 2. Migração para corrigir dados já existentes (one-shot)
+
+Rodar uma vez para vincular todos os atletas que já têm conta criada mas estão com `user_id = NULL`:
+
+```sql
+UPDATE public.athletes a
+SET user_id = u.id
+FROM auth.users u
+WHERE a.user_id IS NULL
+  AND lower(a.email) = lower(u.email);
+```
+
+Isso resolve o caso do `sfterra.rafael@gmail.com` e qualquer outro pendente.
+
+#### 3. Vinculação manual no painel admin (UI)
+
+No diálogo de edição de atleta (`EditAthleteDialog` em `src/pages/Admin.tsx`), adicionar uma seção "Conta vinculada":
+
+- Mostrar status atual: "Vinculado a: <email do auth.user>" ou "Nenhuma conta vinculada".
+- Se não vinculado: botão **"Buscar conta por email"** — busca em `auth.users` (via RPC) por email correspondente e vincula no clique.
+- Se vinculado: botão **"Desvincular"** que seta `user_id = NULL`.
+
+Como o cliente não pode ler `auth.users` diretamente, criar uma RPC `find_user_by_email(_email text)` com `SECURITY DEFINER` que retorna apenas `id` quando o caller é admin (`has_role(auth.uid(), 'admin')`).
 
 ### Arquivos
 
-- `src/pages/Admin.tsx` — adicionar botão "Novo atleta", estado `createOpen`, e adaptar `EditAthleteDialog` para suportar criação.
+- **Migração SQL**: atualizar `handle_new_user()` + UPDATE one-shot + criar RPC `find_user_by_email`.
+- `src/pages/Admin.tsx`: adicionar seção "Conta vinculada" no `EditAthleteDialog` com busca/vincular/desvincular.
 
-Sem migração de banco — a tabela `athletes` já existe e tem as policies certas.
+### Resumo do comportamento depois da mudança
+
+- Atletas já cadastrados com email correto: serão vinculados imediatamente pela migração.
+- Novos signups: vinculação automática se houver atleta com mesmo email.
+- Casos sem email ou com email divergente: admin pode vincular manualmente pelo diálogo de edição.
