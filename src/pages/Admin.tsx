@@ -83,6 +83,7 @@ export default function Admin() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Athlete | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     document.title = "Admin | Itaipu Beach Tennis";
@@ -325,6 +326,9 @@ export default function Admin() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Button onClick={() => setCreateOpen(true)}>
+                  <Plus className="size-4" /> Novo atleta
+                </Button>
               </div>
 
               <p className="text-xs text-muted-foreground mb-3">
@@ -520,6 +524,13 @@ export default function Admin() {
         onClose={() => { setEditOpen(false); setEditTarget(null); }}
         onSaved={() => { setEditOpen(false); setEditTarget(null); load(); }}
       />
+      <EditAthleteDialog
+        open={createOpen}
+        athlete={null}
+        plans={plans}
+        onClose={() => setCreateOpen(false)}
+        onSaved={() => { setCreateOpen(false); load(); }}
+      />
     </div>
   );
 }
@@ -530,6 +541,7 @@ function EditAthleteDialog({
   open: boolean; athlete: Athlete | null; plans: Plan[];
   onClose: () => void; onSaved: () => void;
 }) {
+  const isCreate = !athlete;
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -541,22 +553,32 @@ function EditAthleteDialog({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!athlete) return;
-    setFullName(athlete.full_name);
-    setPhone(athlete.phone ?? "");
-    setEmail(athlete.email ?? "");
-    setBirthDate(athlete.birth_date ?? "");
-    setJoinedAt(athlete.joined_at ?? "");
-    setPlanId(athlete.plan_id ?? "");
-    setManualStatus(athlete.manual_status ?? "");
-    setNotes(athlete.notes ?? "");
-  }, [athlete]);
+    if (!open) return;
+    if (athlete) {
+      setFullName(athlete.full_name);
+      setPhone(athlete.phone ?? "");
+      setEmail(athlete.email ?? "");
+      setBirthDate(athlete.birth_date ?? "");
+      setJoinedAt(athlete.joined_at ?? "");
+      setPlanId(athlete.plan_id ?? "");
+      setManualStatus(athlete.manual_status ?? "");
+      setNotes(athlete.notes ?? "");
+    } else {
+      setFullName("");
+      setPhone("");
+      setEmail("");
+      setBirthDate("");
+      setJoinedAt(format(new Date(), "yyyy-MM-dd"));
+      setPlanId("");
+      setManualStatus("");
+      setNotes("");
+    }
+  }, [athlete, open]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!athlete) return;
     setSaving(true);
-    const { error } = await supabase.from("athletes").update({
+    const payload = {
       full_name: fullName,
       phone: phone || null,
       email: email || null,
@@ -565,10 +587,13 @@ function EditAthleteDialog({
       plan_id: planId || null,
       manual_status: (manualStatus || null) as ManualStatus | null,
       notes: notes || null,
-    }).eq("id", athlete.id);
+    };
+    const { error } = isCreate
+      ? await supabase.from("athletes").insert(payload)
+      : await supabase.from("athletes").update(payload).eq("id", athlete!.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Atleta atualizado!");
+    toast.success(isCreate ? "Atleta cadastrado!" : "Atleta atualizado!");
     onSaved();
   }
 
@@ -577,8 +602,10 @@ function EditAthleteDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={save}>
           <DialogHeader>
-            <DialogTitle>Editar atleta</DialogTitle>
-            <DialogDescription>{athlete?.full_name}</DialogDescription>
+            <DialogTitle>{isCreate ? "Novo atleta" : "Editar atleta"}</DialogTitle>
+            <DialogDescription>
+              {isCreate ? "Cadastre um novo atleta no clube." : athlete?.full_name}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-4">
             <div><Label>Nome completo</Label><Input required value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>
