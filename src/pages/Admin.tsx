@@ -551,6 +551,8 @@ function EditAthleteDialog({
   const [manualStatus, setManualStatus] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [linkedUserId, setLinkedUserId] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -563,6 +565,7 @@ function EditAthleteDialog({
       setPlanId(athlete.plan_id ?? "");
       setManualStatus(athlete.manual_status ?? "");
       setNotes(athlete.notes ?? "");
+      setLinkedUserId(athlete.user_id ?? null);
     } else {
       setFullName("");
       setPhone("");
