@@ -575,8 +575,46 @@ function EditAthleteDialog({
       setPlanId("");
       setManualStatus("");
       setNotes("");
+      setLinkedUserId(null);
     }
   }, [athlete, open]);
+
+  async function linkByEmail() {
+    if (!athlete) return;
+    const target = (email || athlete.email || "").trim();
+    if (!target) { toast.error("Informe um email para buscar."); return; }
+    setLinking(true);
+    const { data, error } = await supabase.rpc("find_user_by_email", { _email: target });
+    if (error) { setLinking(false); toast.error(error.message); return; }
+    if (!data) {
+      setLinking(false);
+      toast.error("Nenhuma conta encontrada com esse email.");
+      return;
+    }
+    const { error: updErr } = await supabase
+      .from("athletes")
+      .update({ user_id: data as string })
+      .eq("id", athlete.id);
+    setLinking(false);
+    if (updErr) { toast.error(updErr.message); return; }
+    setLinkedUserId(data as string);
+    toast.success("Conta vinculada!");
+    onSaved();
+  }
+
+  async function unlink() {
+    if (!athlete) return;
+    setLinking(true);
+    const { error } = await supabase
+      .from("athletes")
+      .update({ user_id: null })
+      .eq("id", athlete.id);
+    setLinking(false);
+    if (error) { toast.error(error.message); return; }
+    setLinkedUserId(null);
+    toast.success("Conta desvinculada.");
+    onSaved();
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
