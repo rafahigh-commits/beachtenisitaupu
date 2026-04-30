@@ -251,9 +251,9 @@ function InfoCard({ icon, label, value, hint }: { icon: React.ReactNode; label: 
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-end justify-between border-b border-white/10 pb-4 last:border-0">
-      <span className="text-sm text-white/60">{label}</span>
-      <span className="font-heading font-bold tabular-nums">{value}</span>
+    <div className="flex items-end justify-between border-b border-border/40 pb-3 last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="font-heading font-bold tabular-nums text-ocean-deep">{value}</span>
     </div>
   );
 }
