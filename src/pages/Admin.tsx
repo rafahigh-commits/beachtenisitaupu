@@ -524,6 +524,13 @@ export default function Admin() {
         onClose={() => { setEditOpen(false); setEditTarget(null); }}
         onSaved={() => { setEditOpen(false); setEditTarget(null); load(); }}
       />
+      <EditAthleteDialog
+        open={createOpen}
+        athlete={null}
+        plans={plans}
+        onClose={() => setCreateOpen(false)}
+        onSaved={() => { setCreateOpen(false); load(); }}
+      />
     </div>
   );
 }
