@@ -326,6 +326,9 @@ export default function Admin() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Button onClick={() => setCreateOpen(true)}>
+                  <Plus className="size-4" /> Novo atleta
+                </Button>
               </div>
 
               <p className="text-xs text-muted-foreground mb-3">
