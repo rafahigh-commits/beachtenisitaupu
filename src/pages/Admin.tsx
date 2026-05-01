@@ -314,12 +314,24 @@ export default function Admin() {
         <Tabs defaultValue="members">
           <TabsList className="mb-6 flex-wrap h-auto">
             <TabsTrigger value="members">Atletas</TabsTrigger>
+            <TabsTrigger value="pending" className="relative">
+              <Inbox className="size-4 mr-1.5" /> Pendências
+              {pendingCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-warning text-warning-foreground text-[10px] font-bold min-w-[18px] h-[18px] px-1">
+                  {pendingCount}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="plans">Planos</TabsTrigger>
             <TabsTrigger value="messages">
               <MessageSquare className="size-4 mr-1.5" /> Comunicações
             </TabsTrigger>
             <TabsTrigger value="settings">Configurações</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="pending">
+            <PendingTab onApproved={load} />
+          </TabsContent>
 
           <TabsContent value="members">
             <div className="glass rounded-[32px] p-4 md:p-6">
