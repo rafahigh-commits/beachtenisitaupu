@@ -18,6 +18,8 @@ import {
   CheckCircle2, Settings, UserCog, Pencil, MessageSquare,
 } from "lucide-react";
 import { MessagesTab } from "@/components/admin/MessagesTab";
+import { PendingTab } from "@/components/admin/PendingTab";
+import { Inbox } from "lucide-react";
 import {
   computeStatus, formatCurrency, formatMonth,
   type StatusInfo, type ManualStatus, type Status,
