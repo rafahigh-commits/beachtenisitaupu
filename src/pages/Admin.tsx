@@ -135,6 +135,13 @@ export default function Admin() {
     );
     setAthletes(list);
     setPlans((plansRes.data ?? []) as Plan[]);
+
+    const { count } = await supabase
+      .from("payment_submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    setPendingCount(count ?? 0);
+
     setLoading(false);
   }, []);
 
