@@ -18,6 +18,8 @@ import {
   CheckCircle2, Settings, UserCog, Pencil, MessageSquare,
 } from "lucide-react";
 import { MessagesTab } from "@/components/admin/MessagesTab";
+import { PendingTab } from "@/components/admin/PendingTab";
+import { Inbox } from "lucide-react";
 import {
   computeStatus, formatCurrency, formatMonth,
   type StatusInfo, type ManualStatus, type Status,
@@ -84,6 +86,7 @@ export default function Admin() {
   const [editOpen, setEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Athlete | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     document.title = "Admin | Itaipu Beach Tennis";
@@ -132,6 +135,13 @@ export default function Admin() {
     );
     setAthletes(list);
     setPlans((plansRes.data ?? []) as Plan[]);
+
+    const { count } = await supabase
+      .from("payment_submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    setPendingCount(count ?? 0);
+
     setLoading(false);
   }, []);
 
@@ -304,12 +314,24 @@ export default function Admin() {
         <Tabs defaultValue="members">
           <TabsList className="mb-6 flex-wrap h-auto">
             <TabsTrigger value="members">Atletas</TabsTrigger>
+            <TabsTrigger value="pending" className="relative">
+              <Inbox className="size-4 mr-1.5" /> Pendências
+              {pendingCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-warning text-warning-foreground text-[10px] font-bold min-w-[18px] h-[18px] px-1">
+                  {pendingCount}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="plans">Planos</TabsTrigger>
             <TabsTrigger value="messages">
               <MessageSquare className="size-4 mr-1.5" /> Comunicações
             </TabsTrigger>
             <TabsTrigger value="settings">Configurações</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="pending">
+            <PendingTab onApproved={load} />
+          </TabsContent>
 
           <TabsContent value="members">
             <div className="glass rounded-[32px] p-4 md:p-6">
