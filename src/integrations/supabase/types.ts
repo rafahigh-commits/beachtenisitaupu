@@ -121,6 +121,81 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_submissions: {
+        Row: {
+          amount: number
+          athlete_id: string
+          created_at: string
+          due_date: string | null
+          id: string
+          method: string | null
+          notes: string | null
+          paid_at: string
+          payment_id: string | null
+          receipt_url: string | null
+          reference_month: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["submission_status"]
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          athlete_id: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          method?: string | null
+          notes?: string | null
+          paid_at?: string
+          payment_id?: string | null
+          receipt_url?: string | null
+          reference_month: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["submission_status"]
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          athlete_id?: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          method?: string | null
+          notes?: string | null
+          paid_at?: string
+          payment_id?: string | null
+          receipt_url?: string | null
+          reference_month?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["submission_status"]
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_submissions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_submissions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number
@@ -280,6 +355,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_payment_submission: {
+        Args: { _submission_id: string }
+        Returns: string
+      }
       find_user_by_email: { Args: { _email: string }; Returns: string }
       has_role: {
         Args: {
@@ -288,10 +367,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      reject_payment_submission: {
+        Args: { _reason?: string; _submission_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "member"
       manual_status: "isento" | "saiu" | "doente"
+      submission_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -421,6 +505,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "member"],
       manual_status: ["isento", "saiu", "doente"],
+      submission_status: ["pending", "approved", "rejected"],
     },
   },
 } as const
