@@ -86,6 +86,7 @@ export default function Admin() {
   const [editOpen, setEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Athlete | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     document.title = "Admin | Itaipu Beach Tennis";
