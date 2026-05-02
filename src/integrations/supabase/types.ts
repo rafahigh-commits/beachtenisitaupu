@@ -360,6 +360,7 @@ export type Database = {
         Returns: string
       }
       find_user_by_email: { Args: { _email: string }; Returns: string }
+      find_user_by_phone: { Args: { _phone: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -367,6 +368,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_phone: { Args: { _phone: string }; Returns: string }
       reject_payment_submission: {
         Args: { _reason?: string; _submission_id: string }
         Returns: undefined
