@@ -2,7 +2,7 @@ import { Logo } from "./Logo";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { LogOut, Shield, User as UserIcon } from "lucide-react";
+import { LogOut, Shield, User as UserIcon, Wallet } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,13 @@ export function AppHeader() {
         <Logo />
 
         <div className="flex items-center gap-2 md:gap-6">
+          <Link
+            to="/financeiro"
+            className="hidden sm:flex items-center gap-2 text-sm font-semibold text-ocean-deep/70 hover:text-primary transition-colors"
+          >
+            <Wallet className="size-4" />
+            Financeiro
+          </Link>
           {role === "admin" && (
             <Link
               to="/admin"
@@ -52,6 +59,9 @@ export function AppHeader() {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate("/perfil")}>
                 <UserIcon className="size-4 mr-2" /> Meu perfil
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/financeiro")}>
+                <Wallet className="size-4 mr-2" /> Financeiro
               </DropdownMenuItem>
               {role === "admin" && (
                 <DropdownMenuItem onClick={() => navigate("/admin")}>
