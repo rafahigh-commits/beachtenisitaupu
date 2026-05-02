@@ -348,6 +348,29 @@ export default function Admin() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!confirm("Criar contas de acesso para todos os atletas com telefone válido? A senha inicial é 'bc' + os 4 últimos dígitos do telefone.")) return;
+                    const t = toast.loading("Provisionando contas...");
+                    const { data, error } = await supabase.functions.invoke("provision-athlete-accounts");
+                    toast.dismiss(t);
+                    if (error) {
+                      toast.error(error.message);
+                      return;
+                    }
+                    const skipped = (data?.skipped ?? []) as { name: string; reason: string }[];
+                    toast.success(
+                      `Criadas: ${data?.created ?? 0} · Vinculadas: ${data?.linked ?? 0} · Ignoradas: ${skipped.length}`,
+                    );
+                    if (skipped.length) {
+                      console.warn("Atletas ignorados:", skipped);
+                    }
+                    load();
+                  }}
+                >
+                  <UserCog className="size-4" /> Provisionar contas
+                </Button>
                 <Button onClick={() => setCreateOpen(true)}>
                   <Plus className="size-4" /> Novo atleta
                 </Button>
