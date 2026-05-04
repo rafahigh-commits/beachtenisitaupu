@@ -14,10 +14,17 @@ function digitsOnly(s: string) {
 }
 
 function formatPhoneInput(s: string) {
+  if (s.includes("@")) return s.trim();
   const d = digitsOnly(s).slice(0, 11);
   if (d.length <= 2) return d;
   if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+function loginToEmail(login: string) {
+  const value = login.trim().toLowerCase();
+  if (value.includes("@")) return value;
+  return `${digitsOnly(value)}@phone.beachclub`;
 }
 
 export default function Auth() {
@@ -44,19 +51,21 @@ export default function Auth() {
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
-    const digits = digitsOnly(phone);
-    if (digits.length < 10) {
-      toast.error("Informe um telefone válido com DDD");
+    const login = phone.trim();
+    const isEmail = login.includes("@");
+    const digits = digitsOnly(login);
+    if (!isEmail && digits.length < 10) {
+      toast.error("Informe um telefone válido com DDD ou seu email antigo");
       return;
     }
     setLoading(true);
-    const email = `${digits}@phone.beachclub`;
+    const email = loginToEmail(login);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
       toast.error(
         error.message === "Invalid login credentials"
-          ? "Telefone ou senha incorretos"
+          ? "Telefone/email ou senha incorretos"
           : error.message,
       );
       return;
@@ -79,20 +88,20 @@ export default function Auth() {
             Seu point, seus jogos.
           </h1>
           <p className="text-muted-foreground">
-            Entre com seu telefone cadastrado.
+            Entre com seu telefone cadastrado ou email antigo.
           </p>
         </div>
 
         <div className="glass rounded-3xl p-8">
           <form onSubmit={handleSignIn} className="space-y-4">
             <div>
-              <Label htmlFor="phone">Telefone (com DDD)</Label>
+              <Label htmlFor="phone">Telefone ou email</Label>
               <Input
                 id="phone"
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                placeholder="(21) 99999-9999"
+                type="text"
+                inputMode="email"
+                autoComplete="username"
+                placeholder="(21) 99999-9999 ou email@exemplo.com"
                 required
                 value={phone}
                 onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
