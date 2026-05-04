@@ -1,7 +1,8 @@
-// Pré-cria contas (auth.users) para todos os atletas com telefone válido.
-// Senha inicial = "bc" + últimos 4 dígitos do telefone (6 chars, atende mínimo).
-// Email sintético = "<digitos>@phone.beachclub". O trigger handle_new_user
-// cuida de vincular athletes.user_id automaticamente.
+// Pré-cria/realinha contas (auth.users) para todos os atletas com telefone válido.
+// - Cria conta nova se não existir.
+// - Se o atleta já está vinculado (user_id) mas o email do auth NÃO é o sintético
+//   "<digits>@phone.beachclub", ATUALIZA email + senha para permitir login por telefone.
+// Senha inicial = "bc" + últimos 4 dígitos do telefone.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -56,6 +57,28 @@ Deno.serve(async (req) => {
 
     const admin = createClient(url, service);
 
+    // Carrega todos os usuários auth (paginado) para lookup por email/id
+    const allUsers: any[] = [];
+    {
+      let page = 1;
+      while (page < 50) {
+        const { data: list } = await admin.auth.admin.listUsers({
+          page,
+          perPage: 200,
+        });
+        const users = list?.users ?? [];
+        allUsers.push(...users);
+        if (users.length < 200) break;
+        page++;
+      }
+    }
+    const usersByEmail = new Map<string, any>();
+    const usersById = new Map<string, any>();
+    for (const u of allUsers) {
+      if (u.email) usersByEmail.set(u.email.toLowerCase(), u);
+      usersById.set(u.id, u);
+    }
+
     // Carrega atletas
     const { data: athletes, error: aErr } = await admin
       .from("athletes")
@@ -64,10 +87,10 @@ Deno.serve(async (req) => {
 
     let created = 0;
     let linked = 0;
-    let skipped: { name: string; reason: string }[] = [];
+    let realigned = 0;
+    const skipped: { name: string; reason: string }[] = [];
 
     for (const a of athletes ?? []) {
-      if (a.user_id) continue;
       const digits = digitsOnly(a.phone);
       if (digits.length < 10) {
         skipped.push({
@@ -80,19 +103,44 @@ Deno.serve(async (req) => {
       const last4 = digits.slice(-4);
       const password = `bc${last4}`;
 
-      // Já existe usuário com esse email?
-      const { data: existing } = await admin
-        .from("athletes")
-        .select("id")
-        .limit(1); // dummy; we use admin.auth.admin.listUsers via filter below
-      void existing;
+      // Caso 1: já vinculado — garantir que email/senha permitam login por telefone
+      if (a.user_id) {
+        const existing = usersById.get(a.user_id);
+        if (existing && (existing.email ?? "").toLowerCase() !== email) {
+          // Se já existe outro usuário ocupando esse email sintético, pula
+          const colliding = usersByEmail.get(email);
+          if (colliding && colliding.id !== a.user_id) {
+            skipped.push({
+              name: a.full_name,
+              reason: `email ${email} já em uso por outro usuário`,
+            });
+            continue;
+          }
+          const { error: upErr } = await admin.auth.admin.updateUserById(
+            a.user_id,
+            { email, password, email_confirm: true },
+          );
+          if (upErr) {
+            skipped.push({ name: a.full_name, reason: upErr.message });
+          } else {
+            realigned++;
+          }
+        }
+        continue;
+      }
 
-      const { data: lookup, error: lookErr } = await admin.auth.admin
-        .listUsers({ page: 1, perPage: 1 });
-      void lookup;
-      void lookErr;
+      // Caso 2: não vinculado — talvez já exista usuário com esse email sintético
+      const existingByEmail = usersByEmail.get(email);
+      if (existingByEmail) {
+        await admin
+          .from("athletes")
+          .update({ user_id: existingByEmail.id })
+          .eq("id", a.id);
+        linked++;
+        continue;
+      }
 
-      // listUsers não filtra por email; usamos createUser e tratamos erro de duplicado
+      // Caso 3: criar novo
       const { data: createRes, error: cErr } = await admin.auth.admin
         .createUser({
           email,
@@ -102,43 +150,9 @@ Deno.serve(async (req) => {
         });
 
       if (cErr) {
-        // Já existe — tenta achar e vincular manualmente
-        const msg = String(cErr.message || "").toLowerCase();
-        if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
-          // Procura via listUsers paginado pelo email
-          let foundId: string | null = null;
-          let page = 1;
-          while (page < 50) {
-            const { data: list } = await admin.auth.admin.listUsers({
-              page,
-              perPage: 200,
-            });
-            const u = list?.users?.find(
-              (x: any) => (x.email ?? "").toLowerCase() === email,
-            );
-            if (u) {
-              foundId = u.id;
-              break;
-            }
-            if (!list?.users?.length || list.users.length < 200) break;
-            page++;
-          }
-          if (foundId) {
-            await admin
-              .from("athletes")
-              .update({ user_id: foundId })
-              .eq("id", a.id);
-            linked++;
-          } else {
-            skipped.push({ name: a.full_name, reason: cErr.message });
-          }
-        } else {
-          skipped.push({ name: a.full_name, reason: cErr.message });
-        }
+        skipped.push({ name: a.full_name, reason: cErr.message });
         continue;
       }
-
-      // O trigger já vincula athletes.user_id, mas reforçamos
       if (createRes?.user) {
         await admin
           .from("athletes")
@@ -149,7 +163,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ created, linked, skipped }),
+      JSON.stringify({ created, linked, realigned, skipped }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
