@@ -153,6 +153,28 @@ export function PendingTab({ onApproved }: { onApproved: () => void }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!receiptUrl} onOpenChange={(o) => !o && setReceiptUrl(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Comprovante</DialogTitle>
+            <DialogDescription>
+              {receiptUrl && (
+                <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                  Abrir em nova aba
+                </a>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="w-full max-h-[70vh] overflow-auto rounded-lg bg-muted/30">
+            {receiptUrl && (receiptIsPdf ? (
+              <iframe src={receiptUrl} className="w-full h-[70vh]" title="Comprovante" />
+            ) : (
+              <img src={receiptUrl} alt="Comprovante" className="w-full h-auto" />
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
