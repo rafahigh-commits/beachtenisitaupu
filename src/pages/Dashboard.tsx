@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [unlinked, setUnlinked] = useState(false);
   const [plans, setPlans] = useState<PaymentDialogPlan[]>([]);
   const [payOpen, setPayOpen] = useState(false);
+  const [pendingSubmissions, setPendingSubmissions] = useState<{ id: string; amount: number; reference_month: string; created_at: string }[]>([]);
 
   useEffect(() => {
     document.title = "Dashboard | Itaipu Beach Tennis";
