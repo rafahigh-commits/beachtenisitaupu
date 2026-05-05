@@ -243,6 +243,20 @@ export default function Dashboard() {
           </section>
         </div>
       </main>
+
+      <PaymentDialog
+        open={payOpen}
+        onOpenChange={setPayOpen}
+        target={{
+          id: athlete.id,
+          full_name: athlete.full_name,
+          plan_id: athlete.plan_id,
+          plans: athlete.plans ? { price: athlete.plans.price, duration_months: athlete.plans.duration_months } : null,
+        }}
+        plans={plans}
+        mode="submission"
+        onSuccess={loadData}
+      />
     </div>
   );
 }
