@@ -70,19 +70,26 @@ export default function Dashboard() {
       return;
     }
 
-    const [paysRes, plansRes] = await Promise.all([
+    const [paysRes, plansRes, subsRes] = await Promise.all([
       supabase
         .from("payments")
         .select("id, amount, reference_month, paid_at, due_date, method")
         .eq("athlete_id", ath.id)
         .order("reference_month", { ascending: false }),
       supabase.from("plans").select("id, name, price, duration_months").eq("active", true).order("duration_months").order("price"),
+      supabase
+        .from("payment_submissions")
+        .select("id, amount, reference_month, created_at")
+        .eq("athlete_id", ath.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
     ]);
 
     const pays = (paysRes.data ?? []) as Payment[];
     setAthlete(ath);
     setPayments(pays);
     setPlans((plansRes.data ?? []) as PaymentDialogPlan[]);
+    setPendingSubmissions((subsRes.data ?? []) as typeof pendingSubmissions);
     setStatus(computeStatus(
       pays, cd, id,
       ath.manual_status,
