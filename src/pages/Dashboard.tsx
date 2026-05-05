@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Loader2, CalendarClock, Wallet, Trophy, ArrowDownRight, AlertCircle } from "lucide-react";
+import { Loader2, CalendarClock, Wallet, Trophy, ArrowDownRight, AlertCircle, Plus } from "lucide-react";
 import {
   computeStatus, formatCurrency, formatDate, formatMonth,
   type StatusInfo, type ManualStatus,
@@ -11,6 +11,8 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { PaymentDialog, type PaymentDialogPlan, type PaymentDialogTarget } from "@/components/PaymentDialog";
 
 interface Athlete {
   id: string;
