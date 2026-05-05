@@ -166,6 +166,29 @@ export default function Dashboard() {
                 </Button>
               </div>
 
+              {pendingSubmissions.length > 0 && (
+                <div className="relative mb-6 rounded-3xl border border-warning/30 bg-warning/10 p-5 flex items-start gap-3">
+                  <AlertCircle className="size-5 text-warning shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-ocean-deep">
+                      {pendingSubmissions.length === 1
+                        ? "Você tem 1 pagamento aguardando aprovação"
+                        : `Você tem ${pendingSubmissions.length} pagamentos aguardando aprovação`}
+                    </p>
+                    <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+                      {pendingSubmissions.map((s) => (
+                        <li key={s.id}>
+                          {formatCurrency(Number(s.amount))} · ref.{" "}
+                          {format(new Date(s.reference_month + "T00:00:00"), "MMM/yy", { locale: ptBR })}
+                          {" · enviado em "}
+                          {format(new Date(s.created_at), "dd/MM HH:mm")}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative">
                 <InfoCard
                   icon={<Wallet className="size-5" />}
