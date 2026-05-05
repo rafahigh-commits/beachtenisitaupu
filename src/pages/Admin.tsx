@@ -298,12 +298,15 @@ export default function Admin() {
       <AppHeader />
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 mt-8">
-        <header className="mb-8">
-          <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary bg-primary/10 rounded-full px-3 py-1 mb-3">
-            <UserCog className="size-3" /> Painel Administrativo
-          </span>
-          <h1 className="font-heading text-4xl font-extrabold text-ocean-deep">Comando do Clube</h1>
-          <p className="text-muted-foreground mt-1">{athletes.length} atletas cadastrados.</p>
+        <header className="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary bg-primary/10 rounded-full px-3 py-1 mb-3">
+              <UserCog className="size-3" /> Painel Administrativo
+            </span>
+            <h1 className="font-heading text-4xl font-extrabold text-ocean-deep">Comando do Clube</h1>
+            <p className="text-muted-foreground mt-1">{athletes.length} atletas cadastrados.</p>
+          </div>
+          <PendingDropdown count={pendingCount} onGoToTab={() => setActiveTab("pending")} />
         </header>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
