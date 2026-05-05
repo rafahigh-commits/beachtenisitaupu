@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { MessagesTab } from "@/components/admin/MessagesTab";
 import { PendingTab } from "@/components/admin/PendingTab";
+import { PendingDropdown } from "@/components/admin/PendingDropdown";
 import { Inbox } from "lucide-react";
 import {
   computeStatus, formatCurrency, formatMonth,
