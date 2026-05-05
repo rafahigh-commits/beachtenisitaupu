@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Loader2, CalendarClock, Wallet, Trophy, ArrowDownRight, AlertCircle } from "lucide-react";
+import { Loader2, CalendarClock, Wallet, Trophy, ArrowDownRight, AlertCircle, Plus } from "lucide-react";
 import {
   computeStatus, formatCurrency, formatDate, formatMonth,
   type StatusInfo, type ManualStatus,
@@ -11,6 +11,8 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { PaymentDialog, type PaymentDialogPlan, type PaymentDialogTarget } from "@/components/PaymentDialog";
 
 interface Athlete {
   id: string;
@@ -37,53 +39,59 @@ export default function Dashboard() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [unlinked, setUnlinked] = useState(false);
+  const [plans, setPlans] = useState<PaymentDialogPlan[]>([]);
+  const [payOpen, setPayOpen] = useState(false);
 
   useEffect(() => {
     document.title = "Dashboard | Itaipu Beach Tennis";
   }, []);
 
-  useEffect(() => {
+  const loadData = async () => {
     if (!user) return;
-    (async () => {
-      const settingsRes = await supabase
-        .from("group_settings")
-        .select("charge_days, inactive_days")
-        .eq("id", 1)
-        .maybeSingle();
-      const cd = settingsRes.data?.charge_days ?? 40;
-      const id = settingsRes.data?.inactive_days ?? 120;
+    const settingsRes = await supabase
+      .from("group_settings")
+      .select("charge_days, inactive_days")
+      .eq("id", 1)
+      .maybeSingle();
+    const cd = settingsRes.data?.charge_days ?? 40;
+    const id = settingsRes.data?.inactive_days ?? 120;
 
-      // Buscar atleta vinculado a este user
-      const athRes = await supabase
-        .from("athletes")
-        .select("id, full_name, joined_at, plan_id, manual_status, plans(name, price, duration_months)")
-        .eq("user_id", user.id)
-        .maybeSingle();
+    const athRes = await supabase
+      .from("athletes")
+      .select("id, full_name, joined_at, plan_id, manual_status, plans(name, price, duration_months)")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-      const ath = athRes.data as Athlete | null;
-      if (!ath) {
-        setUnlinked(true);
-        setLoading(false);
-        return;
-      }
+    const ath = athRes.data as Athlete | null;
+    if (!ath) {
+      setUnlinked(true);
+      setLoading(false);
+      return;
+    }
 
-      const paysRes = await supabase
+    const [paysRes, plansRes] = await Promise.all([
+      supabase
         .from("payments")
         .select("id, amount, reference_month, paid_at, due_date, method")
         .eq("athlete_id", ath.id)
-        .order("reference_month", { ascending: false });
+        .order("reference_month", { ascending: false }),
+      supabase.from("plans").select("id, name, price, duration_months").eq("active", true).order("duration_months").order("price"),
+    ]);
 
-      const pays = (paysRes.data ?? []) as Payment[];
-      setAthlete(ath);
-      setPayments(pays);
-      setStatus(computeStatus(
-        pays, cd, id,
-        ath.manual_status,
-        ath.plans ? { duration_months: ath.plans.duration_months } : undefined,
-        ath.joined_at ?? undefined,
-      ));
-      setLoading(false);
-    })();
+    const pays = (paysRes.data ?? []) as Payment[];
+    setAthlete(ath);
+    setPayments(pays);
+    setPlans((plansRes.data ?? []) as PaymentDialogPlan[]);
+    setStatus(computeStatus(
+      pays, cd, id,
+      ath.manual_status,
+      ath.plans ? { duration_months: ath.plans.duration_months } : undefined,
+      ath.joined_at ?? undefined,
+    ));
+    setLoading(false);
+  };
+
+  useEffect(() => { loadData(); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   if (loading) {
@@ -145,6 +153,9 @@ export default function Dashboard() {
                     {messageFor(status.status)}
                   </p>
                 </div>
+                <Button size="lg" onClick={() => setPayOpen(true)} className="shrink-0">
+                  <Plus className="size-4 mr-1" /> Informar pagamento
+                </Button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative">
@@ -232,6 +243,20 @@ export default function Dashboard() {
           </section>
         </div>
       </main>
+
+      <PaymentDialog
+        open={payOpen}
+        onOpenChange={setPayOpen}
+        target={{
+          id: athlete.id,
+          full_name: athlete.full_name,
+          plan_id: athlete.plan_id,
+          plans: athlete.plans ? { price: athlete.plans.price, duration_months: athlete.plans.duration_months } : null,
+        }}
+        plans={plans}
+        mode="submission"
+        onSuccess={loadData}
+      />
     </div>
   );
 }
