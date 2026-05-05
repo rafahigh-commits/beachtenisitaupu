@@ -77,9 +77,10 @@ export function PendingTab({ onApproved }: { onApproved: () => void }) {
   async function viewReceipt(path: string) {
     const { data, error } = await supabase.storage
       .from("payment-receipts")
-      .createSignedUrl(path, 60);
+      .createSignedUrl(path, 300);
     if (error || !data) { toast.error("Não foi possível abrir o comprovante."); return; }
-    window.open(data.signedUrl, "_blank");
+    setReceiptIsPdf(/\.pdf($|\?)/i.test(path));
+    setReceiptUrl(data.signedUrl);
   }
 
   if (loading) {
