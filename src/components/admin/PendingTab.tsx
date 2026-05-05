@@ -32,6 +32,8 @@ export function PendingTab({ onApproved }: { onApproved: () => void }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Submission | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptIsPdf, setReceiptIsPdf] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,9 +77,10 @@ export function PendingTab({ onApproved }: { onApproved: () => void }) {
   async function viewReceipt(path: string) {
     const { data, error } = await supabase.storage
       .from("payment-receipts")
-      .createSignedUrl(path, 60);
+      .createSignedUrl(path, 300);
     if (error || !data) { toast.error("Não foi possível abrir o comprovante."); return; }
-    window.open(data.signedUrl, "_blank");
+    setReceiptIsPdf(/\.pdf($|\?)/i.test(path));
+    setReceiptUrl(data.signedUrl);
   }
 
   if (loading) {
@@ -148,6 +151,28 @@ export function PendingTab({ onApproved }: { onApproved: () => void }) {
               {busyId === rejectTarget?.id ? <Loader2 className="size-4 animate-spin" /> : "Rejeitar"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!receiptUrl} onOpenChange={(o) => !o && setReceiptUrl(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Comprovante</DialogTitle>
+            <DialogDescription>
+              {receiptUrl && (
+                <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                  Abrir em nova aba
+                </a>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="w-full max-h-[70vh] overflow-auto rounded-lg bg-muted/30">
+            {receiptUrl && (receiptIsPdf ? (
+              <iframe src={receiptUrl} className="w-full h-[70vh]" title="Comprovante" />
+            ) : (
+              <img src={receiptUrl} alt="Comprovante" className="w-full h-auto" />
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
