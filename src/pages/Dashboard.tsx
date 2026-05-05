@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [unlinked, setUnlinked] = useState(false);
   const [plans, setPlans] = useState<PaymentDialogPlan[]>([]);
   const [payOpen, setPayOpen] = useState(false);
+  const [pendingSubmissions, setPendingSubmissions] = useState<{ id: string; amount: number; reference_month: string; created_at: string }[]>([]);
 
   useEffect(() => {
     document.title = "Dashboard | Itaipu Beach Tennis";
@@ -69,19 +70,26 @@ export default function Dashboard() {
       return;
     }
 
-    const [paysRes, plansRes] = await Promise.all([
+    const [paysRes, plansRes, subsRes] = await Promise.all([
       supabase
         .from("payments")
         .select("id, amount, reference_month, paid_at, due_date, method")
         .eq("athlete_id", ath.id)
         .order("reference_month", { ascending: false }),
       supabase.from("plans").select("id, name, price, duration_months").eq("active", true).order("duration_months").order("price"),
+      supabase
+        .from("payment_submissions")
+        .select("id, amount, reference_month, created_at")
+        .eq("athlete_id", ath.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
     ]);
 
     const pays = (paysRes.data ?? []) as Payment[];
     setAthlete(ath);
     setPayments(pays);
     setPlans((plansRes.data ?? []) as PaymentDialogPlan[]);
+    setPendingSubmissions((subsRes.data ?? []) as typeof pendingSubmissions);
     setStatus(computeStatus(
       pays, cd, id,
       ath.manual_status,
@@ -157,6 +165,29 @@ export default function Dashboard() {
                   <Plus className="size-4 mr-1" /> Informar pagamento
                 </Button>
               </div>
+
+              {pendingSubmissions.length > 0 && (
+                <div className="relative mb-6 rounded-3xl border border-warning/30 bg-warning/10 p-5 flex items-start gap-3">
+                  <AlertCircle className="size-5 text-warning shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-ocean-deep">
+                      {pendingSubmissions.length === 1
+                        ? "Você tem 1 pagamento aguardando aprovação"
+                        : `Você tem ${pendingSubmissions.length} pagamentos aguardando aprovação`}
+                    </p>
+                    <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+                      {pendingSubmissions.map((s) => (
+                        <li key={s.id}>
+                          {formatCurrency(Number(s.amount))} · ref.{" "}
+                          {format(new Date(s.reference_month + "T00:00:00"), "MMM/yy", { locale: ptBR })}
+                          {" · enviado em "}
+                          {format(new Date(s.created_at), "dd/MM HH:mm")}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative">
                 <InfoCard
