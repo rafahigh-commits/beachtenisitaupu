@@ -32,6 +32,8 @@ export function PendingTab({ onApproved }: { onApproved: () => void }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Submission | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptIsPdf, setReceiptIsPdf] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
