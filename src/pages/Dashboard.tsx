@@ -153,6 +153,9 @@ export default function Dashboard() {
                     {messageFor(status.status)}
                   </p>
                 </div>
+                <Button size="lg" onClick={() => setPayOpen(true)} className="shrink-0">
+                  <Plus className="size-4 mr-1" /> Informar pagamento
+                </Button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative">
