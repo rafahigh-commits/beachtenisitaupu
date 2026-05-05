@@ -316,7 +316,7 @@ export default function Admin() {
           <StatCard icon={<DollarSign className="size-5" />} label="Receita ativa" value={formatCurrency(stats.revenue)} tone="accent" />
         </div>
 
-        <Tabs defaultValue="members">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6 flex-wrap h-auto">
             <TabsTrigger value="members">Atletas</TabsTrigger>
             <TabsTrigger value="pending" className="relative">
