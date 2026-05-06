@@ -148,15 +148,105 @@ export default function Financeiro() {
     if (exts.data) setExtras(exts.data);
   }, [isAdmin, selectedMonth]);
 
+  const loadForecast = useCallback(async () => {
+    const [athletesRes, paymentsRes, expensesRes] = await Promise.all([
+      supabase
+        .from("athletes")
+        .select("id, joined_at, manual_status, plan:plans(id, price, duration_months, active)"),
+      supabase
+        .from("payments")
+        .select("athlete_id, reference_month, amount")
+        .gte("reference_month", `${selectedYear - 1}-01-01`)
+        .lte("reference_month", `${selectedYear}-12-31`),
+      supabase
+        .from("expenses")
+        .select("amount, reference_month")
+        .gte("reference_month", `${selectedYear}-01-01`)
+        .lte("reference_month", `${selectedYear}-12-31`),
+    ]);
+
+    const athletes = (athletesRes.data ?? []) as Array<{
+      id: string;
+      joined_at: string | null;
+      manual_status: string | null;
+      plan: { id: string; price: number; duration_months: number; active: boolean } | null;
+    }>;
+    const allPayments = (paymentsRes.data ?? []) as Array<{
+      athlete_id: string;
+      reference_month: string;
+      amount: number;
+    }>;
+
+    const byAthlete = new Map<string, typeof allPayments>();
+    for (const p of allPayments) {
+      const arr = byAthlete.get(p.athlete_id) ?? [];
+      arr.push(p);
+      byAthlete.set(p.athlete_id, arr);
+    }
+
+    const today = new Date();
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const incomeByMonth: Record<string, number> = {};
+
+    for (const a of athletes) {
+      if (!a.plan || !a.plan.active) continue;
+      if (a.manual_status === "saiu" || a.manual_status === "isento") continue;
+      const duration = a.plan.duration_months || 1;
+      const price = Number(a.plan.price) || 0;
+      if (price <= 0) continue;
+
+      const payments = (byAthlete.get(a.id) ?? []).slice().sort(
+        (x, y) => y.reference_month.localeCompare(x.reference_month),
+      );
+
+      let nextDate: Date;
+      if (payments.length > 0) {
+        const last = new Date(payments[0].reference_month);
+        nextDate = new Date(last.getFullYear(), last.getMonth() + duration, 1);
+      } else if (a.joined_at) {
+        const j = new Date(a.joined_at);
+        nextDate = new Date(j.getFullYear(), j.getMonth(), 1);
+      } else {
+        nextDate = new Date(currentMonthStart);
+      }
+
+      while (nextDate < currentMonthStart) {
+        nextDate = new Date(nextDate.getFullYear(), nextDate.getMonth() + duration, 1);
+      }
+
+      while (nextDate.getFullYear() === selectedYear) {
+        const key = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-01`;
+        incomeByMonth[key] = (incomeByMonth[key] ?? 0) + price;
+        nextDate = new Date(nextDate.getFullYear(), nextDate.getMonth() + duration, 1);
+      }
+    }
+
+    const expByMonth: Record<string, number> = {};
+    for (const e of (expensesRes.data ?? []) as Array<{ amount: number; reference_month: string }>) {
+      const key = e.reference_month.slice(0, 7);
+      expByMonth[key] = (expByMonth[key] ?? 0) + Number(e.amount);
+    }
+    const pastEntries = Object.entries(expByMonth).filter(([k, v]) => {
+      const [y, m] = k.split("-").map(Number);
+      return new Date(y, m - 1, 1) <= currentMonthStart && v > 0;
+    });
+    const avgExp = pastEntries.length > 0
+      ? pastEntries.reduce((s, [, v]) => s + v, 0) / pastEntries.length
+      : 0;
+
+    setForecastIncome(incomeByMonth);
+    setForecastAvgExpenses(avgExp);
+  }, [selectedYear]);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadSummary(), loadYear(), loadAdminData()]).finally(() =>
+    Promise.all([loadSummary(), loadYear(), loadAdminData(), loadForecast()]).finally(() =>
       setLoading(false),
     );
-  }, [loadSummary, loadYear, loadAdminData]);
+  }, [loadSummary, loadYear, loadAdminData, loadForecast]);
 
   const refreshAll = async () => {
-    await Promise.all([loadSummary(), loadYear(), loadAdminData()]);
+    await Promise.all([loadSummary(), loadYear(), loadAdminData(), loadForecast()]);
   };
 
   const maxYearValue = useMemo(
