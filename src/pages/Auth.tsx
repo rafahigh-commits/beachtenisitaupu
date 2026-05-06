@@ -137,9 +137,17 @@ export default function Auth() {
             </Button>
           </form>
 
-          <p className="text-xs text-muted-foreground text-center mt-6">
-            Não consegue entrar? Fale com o admin do grupo.
-          </p>
+          <div className="text-center mt-6 space-y-2">
+            <a
+              href="/forgot-password"
+              className="text-xs text-primary hover:underline font-semibold"
+            >
+              Esqueci minha senha
+            </a>
+            <p className="text-xs text-muted-foreground">
+              Não consegue entrar? Fale com o admin do grupo.
+            </p>
+          </div>
         </div>
       </main>
     </div>

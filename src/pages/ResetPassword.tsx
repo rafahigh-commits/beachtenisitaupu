@@ -45,12 +45,20 @@ export default function ResetPassword() {
       return;
     }
     setLoading(true);
+    const { data: userData } = await supabase.auth.getUser();
     const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
     if (error) {
+      setLoading(false);
       toast.error(error.message);
       return;
     }
+    if (userData.user) {
+      await supabase
+        .from("profiles")
+        .update({ must_change_password: false })
+        .eq("id", userData.user.id);
+    }
+    setLoading(false);
     toast.success("Senha atualizada! Faça login novamente.");
     await supabase.auth.signOut();
     navigate("/auth");
