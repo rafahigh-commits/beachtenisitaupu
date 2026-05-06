@@ -102,6 +102,9 @@ export default function Financeiro() {
   const [categoryDialog, setCategoryDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
+  const [forecastIncome, setForecastIncome] = useState<Record<string, number>>({});
+  const [forecastAvgExpenses, setForecastAvgExpenses] = useState(0);
+
   const loadSummary = useCallback(async () => {
     const { data, error } = await supabase.rpc("financial_summary_month", {
       _month: monthToDate(selectedMonth),
@@ -145,24 +148,131 @@ export default function Financeiro() {
     if (exts.data) setExtras(exts.data);
   }, [isAdmin, selectedMonth]);
 
+  const loadForecast = useCallback(async () => {
+    const [athletesRes, paymentsRes, expensesRes] = await Promise.all([
+      supabase
+        .from("athletes")
+        .select("id, joined_at, manual_status, plan:plans(id, price, duration_months, active)"),
+      supabase
+        .from("payments")
+        .select("athlete_id, reference_month, amount")
+        .gte("reference_month", `${selectedYear - 1}-01-01`)
+        .lte("reference_month", `${selectedYear}-12-31`),
+      supabase
+        .from("expenses")
+        .select("amount, reference_month")
+        .gte("reference_month", `${selectedYear}-01-01`)
+        .lte("reference_month", `${selectedYear}-12-31`),
+    ]);
+
+    const athletes = (athletesRes.data ?? []) as Array<{
+      id: string;
+      joined_at: string | null;
+      manual_status: string | null;
+      plan: { id: string; price: number; duration_months: number; active: boolean } | null;
+    }>;
+    const allPayments = (paymentsRes.data ?? []) as Array<{
+      athlete_id: string;
+      reference_month: string;
+      amount: number;
+    }>;
+
+    const byAthlete = new Map<string, typeof allPayments>();
+    for (const p of allPayments) {
+      const arr = byAthlete.get(p.athlete_id) ?? [];
+      arr.push(p);
+      byAthlete.set(p.athlete_id, arr);
+    }
+
+    const today = new Date();
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const incomeByMonth: Record<string, number> = {};
+
+    for (const a of athletes) {
+      if (!a.plan || !a.plan.active) continue;
+      if (a.manual_status === "saiu" || a.manual_status === "isento") continue;
+      const duration = a.plan.duration_months || 1;
+      const price = Number(a.plan.price) || 0;
+      if (price <= 0) continue;
+
+      const payments = (byAthlete.get(a.id) ?? []).slice().sort(
+        (x, y) => y.reference_month.localeCompare(x.reference_month),
+      );
+
+      let nextDate: Date;
+      if (payments.length > 0) {
+        const last = new Date(payments[0].reference_month);
+        nextDate = new Date(last.getFullYear(), last.getMonth() + duration, 1);
+      } else if (a.joined_at) {
+        const j = new Date(a.joined_at);
+        nextDate = new Date(j.getFullYear(), j.getMonth(), 1);
+      } else {
+        nextDate = new Date(currentMonthStart);
+      }
+
+      while (nextDate < currentMonthStart) {
+        nextDate = new Date(nextDate.getFullYear(), nextDate.getMonth() + duration, 1);
+      }
+
+      while (nextDate.getFullYear() === selectedYear) {
+        const key = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-01`;
+        incomeByMonth[key] = (incomeByMonth[key] ?? 0) + price;
+        nextDate = new Date(nextDate.getFullYear(), nextDate.getMonth() + duration, 1);
+      }
+    }
+
+    const expByMonth: Record<string, number> = {};
+    for (const e of (expensesRes.data ?? []) as Array<{ amount: number; reference_month: string }>) {
+      const key = e.reference_month.slice(0, 7);
+      expByMonth[key] = (expByMonth[key] ?? 0) + Number(e.amount);
+    }
+    const pastEntries = Object.entries(expByMonth).filter(([k, v]) => {
+      const [y, m] = k.split("-").map(Number);
+      return new Date(y, m - 1, 1) <= currentMonthStart && v > 0;
+    });
+    const avgExp = pastEntries.length > 0
+      ? pastEntries.reduce((s, [, v]) => s + v, 0) / pastEntries.length
+      : 0;
+
+    setForecastIncome(incomeByMonth);
+    setForecastAvgExpenses(avgExp);
+  }, [selectedYear]);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadSummary(), loadYear(), loadAdminData()]).finally(() =>
+    Promise.all([loadSummary(), loadYear(), loadAdminData(), loadForecast()]).finally(() =>
       setLoading(false),
     );
-  }, [loadSummary, loadYear, loadAdminData]);
+  }, [loadSummary, loadYear, loadAdminData, loadForecast]);
 
   const refreshAll = async () => {
-    await Promise.all([loadSummary(), loadYear(), loadAdminData()]);
+    await Promise.all([loadSummary(), loadYear(), loadAdminData(), loadForecast()]);
   };
+
+  const yearWithForecast = useMemo(() => {
+    const today = new Date();
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    return yearData.map((m) => {
+      const d = new Date(m.month);
+      const isFuture = d > currentMonthStart && d.getFullYear() === selectedYear;
+      const isCurrent = d.getFullYear() === currentMonthStart.getFullYear() && d.getMonth() === currentMonthStart.getMonth();
+      const key = m.month.slice(0, 10);
+      const forecastInc = forecastIncome[key] ?? 0;
+      // Para mês atual: se ainda não pago, soma forecast ao realizado
+      const projIncome = isFuture ? forecastInc : isCurrent ? Math.max(m.income_total, forecastInc) : m.income_total;
+      const projExpenses = isFuture ? forecastAvgExpenses : m.expenses_total;
+      const projBalance = projIncome - projExpenses;
+      return { ...m, isFuture, projIncome, projExpenses, projBalance };
+    });
+  }, [yearData, forecastIncome, forecastAvgExpenses, selectedYear]);
 
   const maxYearValue = useMemo(
     () =>
       Math.max(
         1,
-        ...yearData.map((m) => Math.max(m.income_total, m.expenses_total)),
+        ...yearWithForecast.map((m) => Math.max(m.projIncome, m.projExpenses)),
       ),
-    [yearData],
+    [yearWithForecast],
   );
 
   return (
@@ -308,6 +418,10 @@ export default function Financeiro() {
               />
             </div>
             <div className="glass rounded-3xl p-6 overflow-x-auto">
+              <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-500" /> Realizado</span>
+                <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-500/40 border border-dashed border-emerald-600" /> Previsão (atletas ativos)</span>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -319,44 +433,49 @@ export default function Financeiro() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {yearData.map((m) => (
-                    <TableRow key={m.month}>
+                  {yearWithForecast.map((m) => (
+                    <TableRow key={m.month} className={m.isFuture ? "opacity-80" : ""}>
                       <TableCell className="font-medium">
                         {formatMonth(m.month)}
+                        {m.isFuture && (
+                          <span className="ml-2 text-[10px] uppercase tracking-wide font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            previsão
+                          </span>
+                        )}
                       </TableCell>
-                      <TableCell className="text-right text-emerald-600 tabular-nums">
-                        {formatCurrency(m.income_total)}
+                      <TableCell className={`text-right tabular-nums ${m.isFuture ? "text-emerald-600/70 italic" : "text-emerald-600"}`}>
+                        {formatCurrency(m.projIncome)}
                       </TableCell>
-                      <TableCell className="text-right text-rose-600 tabular-nums">
-                        {formatCurrency(m.expenses_total)}
+                      <TableCell className={`text-right tabular-nums ${m.isFuture ? "text-rose-600/70 italic" : "text-rose-600"}`}>
+                        {formatCurrency(m.projExpenses)}
                       </TableCell>
                       <TableCell
-                        className={`text-right font-semibold tabular-nums ${m.balance >= 0 ? "text-ocean-deep" : "text-rose-600"}`}
+                        className={`text-right font-semibold tabular-nums ${m.projBalance >= 0 ? "text-ocean-deep" : "text-rose-600"} ${m.isFuture ? "italic" : ""}`}
                       >
-                        {formatCurrency(m.balance)}
+                        {formatCurrency(m.projBalance)}
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="h-1.5 rounded-full bg-emerald-500/80"
-                            style={{ width: `${(m.income_total / maxYearValue) * 100}%` }}
+                          <div className={`h-1.5 rounded-full ${m.isFuture ? "bg-emerald-500/40 border border-dashed border-emerald-600" : "bg-emerald-500/80"}`}
+                            style={{ width: `${(m.projIncome / maxYearValue) * 100}%` }}
                           />
-                          <div className="h-1.5 rounded-full bg-rose-500/80"
-                            style={{ width: `${(m.expenses_total / maxYearValue) * 100}%` }}
+                          <div className={`h-1.5 rounded-full ${m.isFuture ? "bg-rose-500/40 border border-dashed border-rose-600" : "bg-rose-500/80"}`}
+                            style={{ width: `${(m.projExpenses / maxYearValue) * 100}%` }}
                           />
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="border-t-2">
-                    <TableCell className="font-bold">Total</TableCell>
+                    <TableCell className="font-bold">Total (com previsão)</TableCell>
                     <TableCell className="text-right font-bold text-emerald-600 tabular-nums">
-                      {formatCurrency(yearData.reduce((s, m) => s + m.income_total, 0))}
+                      {formatCurrency(yearWithForecast.reduce((s, m) => s + m.projIncome, 0))}
                     </TableCell>
                     <TableCell className="text-right font-bold text-rose-600 tabular-nums">
-                      {formatCurrency(yearData.reduce((s, m) => s + m.expenses_total, 0))}
+                      {formatCurrency(yearWithForecast.reduce((s, m) => s + m.projExpenses, 0))}
                     </TableCell>
                     <TableCell className="text-right font-bold tabular-nums">
-                      {formatCurrency(yearData.reduce((s, m) => s + m.balance, 0))}
+                      {formatCurrency(yearWithForecast.reduce((s, m) => s + m.projBalance, 0))}
                     </TableCell>
                     <TableCell />
                   </TableRow>
