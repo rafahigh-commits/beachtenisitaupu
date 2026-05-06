@@ -102,6 +102,9 @@ export default function Financeiro() {
   const [categoryDialog, setCategoryDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
+  const [forecastIncome, setForecastIncome] = useState<Record<string, number>>({});
+  const [forecastAvgExpenses, setForecastAvgExpenses] = useState(0);
+
   const loadSummary = useCallback(async () => {
     const { data, error } = await supabase.rpc("financial_summary_month", {
       _month: monthToDate(selectedMonth),
