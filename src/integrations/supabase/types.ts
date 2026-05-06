@@ -404,6 +404,7 @@ export type Database = {
           id: string
           joined_at: string
           manual_status: Database["public"]["Enums"]["manual_status"] | null
+          must_change_password: boolean
           notes: string | null
           phone: string | null
           plan_id: string | null
@@ -417,6 +418,7 @@ export type Database = {
           id: string
           joined_at?: string
           manual_status?: Database["public"]["Enums"]["manual_status"] | null
+          must_change_password?: boolean
           notes?: string | null
           phone?: string | null
           plan_id?: string | null
@@ -430,6 +432,7 @@ export type Database = {
           id?: string
           joined_at?: string
           manual_status?: Database["public"]["Enums"]["manual_status"] | null
+          must_change_password?: boolean
           notes?: string | null
           phone?: string | null
           plan_id?: string | null
