@@ -418,6 +418,10 @@ export default function Financeiro() {
               />
             </div>
             <div className="glass rounded-3xl p-6 overflow-x-auto">
+              <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-500" /> Realizado</span>
+                <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-500/40 border border-dashed border-emerald-600" /> Previsão (atletas ativos)</span>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -429,44 +433,49 @@ export default function Financeiro() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {yearData.map((m) => (
-                    <TableRow key={m.month}>
+                  {yearWithForecast.map((m) => (
+                    <TableRow key={m.month} className={m.isFuture ? "opacity-80" : ""}>
                       <TableCell className="font-medium">
                         {formatMonth(m.month)}
+                        {m.isFuture && (
+                          <span className="ml-2 text-[10px] uppercase tracking-wide font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            previsão
+                          </span>
+                        )}
                       </TableCell>
-                      <TableCell className="text-right text-emerald-600 tabular-nums">
-                        {formatCurrency(m.income_total)}
+                      <TableCell className={`text-right tabular-nums ${m.isFuture ? "text-emerald-600/70 italic" : "text-emerald-600"}`}>
+                        {formatCurrency(m.projIncome)}
                       </TableCell>
-                      <TableCell className="text-right text-rose-600 tabular-nums">
-                        {formatCurrency(m.expenses_total)}
+                      <TableCell className={`text-right tabular-nums ${m.isFuture ? "text-rose-600/70 italic" : "text-rose-600"}`}>
+                        {formatCurrency(m.projExpenses)}
                       </TableCell>
                       <TableCell
-                        className={`text-right font-semibold tabular-nums ${m.balance >= 0 ? "text-ocean-deep" : "text-rose-600"}`}
+                        className={`text-right font-semibold tabular-nums ${m.projBalance >= 0 ? "text-ocean-deep" : "text-rose-600"} ${m.isFuture ? "italic" : ""}`}
                       >
-                        {formatCurrency(m.balance)}
+                        {formatCurrency(m.projBalance)}
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="h-1.5 rounded-full bg-emerald-500/80"
-                            style={{ width: `${(m.income_total / maxYearValue) * 100}%` }}
+                          <div className={`h-1.5 rounded-full ${m.isFuture ? "bg-emerald-500/40 border border-dashed border-emerald-600" : "bg-emerald-500/80"}`}
+                            style={{ width: `${(m.projIncome / maxYearValue) * 100}%` }}
                           />
-                          <div className="h-1.5 rounded-full bg-rose-500/80"
-                            style={{ width: `${(m.expenses_total / maxYearValue) * 100}%` }}
+                          <div className={`h-1.5 rounded-full ${m.isFuture ? "bg-rose-500/40 border border-dashed border-rose-600" : "bg-rose-500/80"}`}
+                            style={{ width: `${(m.projExpenses / maxYearValue) * 100}%` }}
                           />
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="border-t-2">
-                    <TableCell className="font-bold">Total</TableCell>
+                    <TableCell className="font-bold">Total (com previsão)</TableCell>
                     <TableCell className="text-right font-bold text-emerald-600 tabular-nums">
-                      {formatCurrency(yearData.reduce((s, m) => s + m.income_total, 0))}
+                      {formatCurrency(yearWithForecast.reduce((s, m) => s + m.projIncome, 0))}
                     </TableCell>
                     <TableCell className="text-right font-bold text-rose-600 tabular-nums">
-                      {formatCurrency(yearData.reduce((s, m) => s + m.expenses_total, 0))}
+                      {formatCurrency(yearWithForecast.reduce((s, m) => s + m.projExpenses, 0))}
                     </TableCell>
                     <TableCell className="text-right font-bold tabular-nums">
-                      {formatCurrency(yearData.reduce((s, m) => s + m.balance, 0))}
+                      {formatCurrency(yearWithForecast.reduce((s, m) => s + m.projBalance, 0))}
                     </TableCell>
                     <TableCell />
                   </TableRow>
