@@ -249,13 +249,30 @@ export default function Financeiro() {
     await Promise.all([loadSummary(), loadYear(), loadAdminData(), loadForecast()]);
   };
 
+  const yearWithForecast = useMemo(() => {
+    const today = new Date();
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    return yearData.map((m) => {
+      const d = new Date(m.month);
+      const isFuture = d > currentMonthStart && d.getFullYear() === selectedYear;
+      const isCurrent = d.getFullYear() === currentMonthStart.getFullYear() && d.getMonth() === currentMonthStart.getMonth();
+      const key = m.month.slice(0, 10);
+      const forecastInc = forecastIncome[key] ?? 0;
+      // Para mês atual: se ainda não pago, soma forecast ao realizado
+      const projIncome = isFuture ? forecastInc : isCurrent ? Math.max(m.income_total, forecastInc) : m.income_total;
+      const projExpenses = isFuture ? forecastAvgExpenses : m.expenses_total;
+      const projBalance = projIncome - projExpenses;
+      return { ...m, isFuture, projIncome, projExpenses, projBalance };
+    });
+  }, [yearData, forecastIncome, forecastAvgExpenses, selectedYear]);
+
   const maxYearValue = useMemo(
     () =>
       Math.max(
         1,
-        ...yearData.map((m) => Math.max(m.income_total, m.expenses_total)),
+        ...yearWithForecast.map((m) => Math.max(m.projIncome, m.projExpenses)),
       ),
-    [yearData],
+    [yearWithForecast],
   );
 
   return (
