@@ -8,22 +8,27 @@ interface AuthCtx {
   user: User | null;
   session: Session | null;
   role: Role | null;
+  mustChangePassword: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshMustChangePassword: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx>({
   user: null,
   session: null,
   role: null,
+  mustChangePassword: false,
   loading: true,
   signOut: async () => {},
+  refreshMustChangePassword: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,17 +36,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        // defer role fetch to avoid deadlock
-        setTimeout(() => fetchRole(s.user.id), 0);
+        setTimeout(() => {
+          fetchRole(s.user.id);
+          fetchMustChange(s.user.id);
+        }, 0);
       } else {
         setRole(null);
+        setMustChangePassword(false);
       }
     });
 
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) fetchRole(s.user.id);
+      if (s?.user) {
+        fetchRole(s.user.id);
+        fetchMustChange(s.user.id);
+      }
       setLoading(false);
     });
 
@@ -57,18 +68,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRole("member");
       return;
     }
-    // admin wins if user has multiple roles
     const isAdmin = data.some((r: { role: Role }) => r.role === "admin");
     setRole(isAdmin ? "admin" : "member");
+  }
+
+  async function fetchMustChange(userId: string) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("must_change_password")
+      .eq("id", userId)
+      .maybeSingle();
+    setMustChangePassword(!!data?.must_change_password);
+  }
+
+  async function refreshMustChangePassword() {
+    if (user) await fetchMustChange(user.id);
   }
 
   async function signOut() {
     await supabase.auth.signOut();
     setRole(null);
+    setMustChangePassword(false);
   }
 
   return (
-    <Ctx.Provider value={{ user, session, role, loading, signOut }}>
+    <Ctx.Provider value={{ user, session, role, mustChangePassword, loading, signOut, refreshMustChangePassword }}>
       {children}
     </Ctx.Provider>
   );
