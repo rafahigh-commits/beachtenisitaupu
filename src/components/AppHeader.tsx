@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, Shield, User as UserIcon, Wallet } from "lucide-react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,11 +13,36 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+function computeInitials(name?: string | null, fallback?: string | null) {
+  const source = (name ?? "").trim();
+  if (source) {
+    const parts = source.split(/\s+/).filter(Boolean);
+    const first = parts[0]?.[0] ?? "";
+    const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+    const result = (first + last).toUpperCase();
+    if (result) return result;
+  }
+  const email = (fallback ?? "").trim();
+  if (email) return email.slice(0, 2).toUpperCase();
+  return "??";
+}
+
 export function AppHeader() {
   const { user, role, signOut } = useAuth();
   const navigate = useNavigate();
-  const initials =
-    user?.email?.slice(0, 2).toUpperCase() ?? "??";
+  const [fullName, setFullName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) { setFullName(null); return; }
+    supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => setFullName(data?.full_name ?? null));
+  }, [user]);
+
+  const initials = computeInitials(fullName, user?.email);
 
   return (
     <header className="sticky top-4 z-40 mx-4 md:mx-8">
