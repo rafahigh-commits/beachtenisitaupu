@@ -17,11 +17,13 @@ import {
   renderTemplate, toWhatsappNumber, TEMPLATE_VARIABLES,
 } from "@/lib/messageTemplate";
 import type { StatusInfo, Status } from "@/lib/membership";
+import { PushSender } from "./PushSender";
 
 interface Athlete {
   id: string;
   full_name: string;
   phone: string | null;
+  user_id?: string | null;
   plans: { price: number } | null;
   status: StatusInfo;
 }
@@ -210,6 +212,8 @@ export function MessagesTab({ athletes }: { athletes: Athlete[] }) {
 
   return (
     <div className="space-y-6">
+      <PushSender athletes={athletes.map((a) => ({ id: a.id, full_name: a.full_name, user_id: a.user_id ?? null }))} />
+
       {/* Templates */}
       <div className="glass rounded-[32px] p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">

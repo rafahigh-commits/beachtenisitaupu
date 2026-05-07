@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { LogOut, Shield, User as UserIcon, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { NotificationBell } from "./NotificationBell";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +33,7 @@ export function AppHeader() {
   const { user, role, signOut } = useAuth();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState<string | null>(null);
+  usePushNotifications();
 
   useEffect(() => {
     if (!user) { setFullName(null); return; }
@@ -66,6 +69,8 @@ export function AppHeader() {
               Painel Admin
             </Link>
           )}
+
+          <NotificationBell />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
